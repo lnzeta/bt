@@ -5,25 +5,24 @@ default: build_dev
 .PHONY: dist upload docs pages serve klink notebooks test lint fix develop
 
 develop:
-	python -m pip install -e .[dev]
+	uv sync --dev
 
 test:
-	python -m pytest -vvv tests --cov=bt --junitxml=python_junit.xml --cov-report=xml --cov-branch --cov-report term
+	uv run pytest -vvv tests --cov=bt --junitxml=python_junit.xml --cov-report=xml --cov-branch --cov-report term
 
 lint:
-	python -m ruff check bt setup.py docs/source/conf.py
-	python -m ruff format --check bt setup.py docs/source/conf.py
+	uv run ruff check bt docs/source/conf.py
+	uv run ruff format --check bt docs/source/conf.py
 
 fix:
-	python -m ruff check --fix bt setup.py docs/source/conf.py
-	python -m ruff format bt setup.py docs/source/conf.py
+	uv run ruff check --fix bt docs/source/conf.py
+	uv run ruff format bt docs/source/conf.py
 
 dist:
-	python setup.py sdist
-	python -m twine check dist/*
+	uv build
 
 upload: dist
-	python -m twine upload dist/* --skip-existing
+	uv run twine upload dist/* --skip-existing
 
 docs:
 	$(MAKE) -C docs/ clean
@@ -41,10 +40,10 @@ pages:
 
 serve:
 	cd docs/build/html; \
-	python -m http.server 9087
+	uv run http.server 9087
 
 build_dev:
-	python setup.py build_ext --inplace
+	uv pip install -e . --no-build-isolation
 
 clean:
 	rm -rf build
