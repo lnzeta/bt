@@ -5,7 +5,7 @@ default: build_dev
 .PHONY: dist upload docs pages serve klink notebooks test lint fix develop
 
 develop:
-	uv sync --dev
+	uv sync --all-extras
 
 test:
 	uv run pytest -vvv tests --cov=bt --junitxml=python_junit.xml --cov-report=xml --cov-branch --cov-report term
@@ -43,7 +43,7 @@ serve:
 	uv run http.server 9087
 
 build_dev:
-	uv pip install -e . --no-build-isolation
+	uv pip install -e . --no-build-isolation --all-extras
 
 clean:
 	rm -rf build
