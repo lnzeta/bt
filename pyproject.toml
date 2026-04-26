@@ -1,5 +1,46 @@
 [build-system]
 requires = ["setuptools", "wheel", "cython>=0.29.25"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bt"
+version = "1.2.0"
+description = "A flexible backtesting framework for Python"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Philippe Morissette"}
+]
+keywords = ["python", "finance", "quant", "backtesting", "strategies", "algotrading", "algorithmic", "trading"]
+requires-python = ">=3.9"
+dependencies = [
+    "ffn>=1.1.2",
+    "pyprind>=2.11",
+    "tqdm>=4",
+]
+
+[project.optional-dependencies]
+dev = [
+    "cython>=0.29.25",
+    "ffn>=1.1.2",
+    "matplotlib>=2",
+    "numpy>=1",
+    "pandas>=0.19",
+    "pyprind>=2.11",
+    "pytest",
+    "pytest-cov",
+    "ruff>=0.5.0,<0.16",
+    "setuptools",
+    "twine",
+    "wheel",
+]
+
+[tool.setuptools]
+packages = ["bt"]
+
+[[tool.setuptools.ext-modules]]
+name = "bt.core"
+sources = ["bt/core.c"]
 
 [tool.ruff]
 line-length = 180
