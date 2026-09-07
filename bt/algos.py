@@ -2086,6 +2086,7 @@ class RollPositionsAfterDates(Algo):
 
     Args:
         * roll_data (str): the name of a dataframe indexed by security name, with columns
+
             - "date": the first date at which the roll can occur
             - "target": the security name we are rolling into
             - "factor": the conversion factor. One unit of the original security
@@ -2212,7 +2213,7 @@ class SimulateRFQTransactions(Algo):
 
     Args:
         * rfqs (str): name of a dataframe with columns
-          Date, Security | quantity, *additional columns as required by model
+          Date, Security | quantity, and additional columns as required by model
         * model (object): a function/callable object with arguments
                 - rfqs : data frame of rfqs to respond to
                 - target : the strategy object, for access to position and value data

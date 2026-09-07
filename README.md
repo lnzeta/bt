@@ -15,7 +15,7 @@ Read the docs here: http://pmorissette.github.io/bt.
 **bt** is a flexible backtesting framework for Python used to test quantitative
 trading strategies. **Backtesting** is the process of testing a strategy over a given
 data set. This framework allows you to easily create strategies that mix and match
-different [Algos](http://pmorissette.github.io/bt/bt.html#bt.core.Algo). It aims to foster the creation of easily testable, re-usable and
+different [Algos](http://pmorissette.github.io/bt/bt.html#bt.core.Algo). It aims to foster the creation of easily testable, reusable and
 flexible blocks of strategy logic to facilitate the rapid development of complex
 trading strategies.
 
@@ -31,44 +31,43 @@ bt is built atop [ffn](https://github.com/pmorissette/ffn) - a financial functio
 
 ## Features
 
-* **Tree Structure**
-    [The tree structure](http://pmorissette.github.io/bt/tree.html) facilitates the construction and composition of complex algorithmic trading
-    strategies that are modular and re-usable. Furthermore, each tree [Node](http://pmorissette.github.io/bt/bt.html#bt.core.Node) has its own
-    price index that can be used by Algos to determine a Node's allocation.
+- **Tree Structure**
+  [The tree structure](http://pmorissette.github.io/bt/tree.html) facilitates the construction and composition of complex algorithmic trading
+  strategies that are modular and reusable. Furthermore, each tree [Node](http://pmorissette.github.io/bt/bt.html#bt.core.Node) has its own
+  price index that can be used by Algos to determine a Node's allocation.
 
-* **Algorithm Stacks**
-    [Algos](http://pmorissette.github.io/bt/bt.html#bt.core.Algo) and [AlgoStacks](http://pmorissette.github.io/bt/bt.html#bt.core.AlgoStack) are
-    another core feature that facilitate the creation of modular and re-usable strategy
-    logic. Due to their modularity, these logic blocks are also easier to test -
-    an important step in building robust financial solutions.
+- **Algorithm Stacks**
+  [Algos](http://pmorissette.github.io/bt/bt.html#bt.core.Algo) and [AlgoStacks](http://pmorissette.github.io/bt/bt.html#bt.core.AlgoStack) are
+  another core feature that facilitate the creation of modular and reusable strategy
+  logic. Due to their modularity, these logic blocks are also easier to test -
+  an important step in building robust financial solutions.
 
-* **Charting and Reporting**
-    bt also provides many useful charting functions that help visualize backtest
-    results. We also plan to add more charts, tables and report formats in the future,
-    such as automatically generated PDF reports.
+- **Charting and Reporting**
+  bt also provides many useful charting functions that help visualize backtest
+  results. We also plan to add more charts, tables and report formats in the future,
+  such as automatically generated PDF reports.
 
-* **Detailed Statistics**
-    Furthermore, bt calculates a bunch of stats relating to a backtest and offers a quick way to compare
-    these various statistics across many different backtests via [Results](http://pmorissette.github.io/bt/bt.html#bt.backtest.Result) display methods.
-
+- **Detailed Statistics**
+  Furthermore, bt calculates a bunch of stats relating to a backtest and offers a quick way to compare
+  these various statistics across many different backtests via [Results](http://pmorissette.github.io/bt/bt.html#bt.backtest.Result) display methods.
 
 ## Roadmap
 
 Future development efforts will focus on:
 
-* **Speed**
-    Due to the flexible nature of bt, a trade-off had to be made between
-    usability and performance. Usability will always be the priority, but we do
-    wish to enhance the performance as much as possible.
+- **Speed**
+  Due to the flexible nature of bt, a trade-off had to be made between
+  usability and performance. Usability will always be the priority, but we do
+  wish to enhance the performance as much as possible.
 
-* **Algos**
-    We will also be developing more algorithms as time goes on. We also
-    encourage anyone to contribute their own algos as well.
+- **Algos**
+  We will also be developing more algorithms as time goes on. We also
+  encourage anyone to contribute their own algos as well.
 
-* **Charting and Reporting**
-    This is another area we wish to constantly improve on
-    as reporting is an important aspect of the job. Charting and reporting also
-    facilitate finding bugs in strategy logic.
+- **Charting and Reporting**
+  This is another area we wish to constantly improve on
+  as reporting is an important aspect of the job. Charting and reporting also
+  facilitate finding bugs in strategy logic.
 
 ## Installing bt
 
@@ -78,7 +77,6 @@ using `pip`:
 ```bash
 pip install bt
 ```
-
 
 Since bt has many dependencies, we strongly recommend installing the [Anaconda Scientific Python
 Distribution](https://store.continuum.io/cshop/anaconda/), especially on Windows. This distribution
@@ -90,9 +88,11 @@ command should complete the installation.
 We believe the best environment to develop with bt is the [IPython Notebook](http://ipython.org/notebook.html).
 From their homepage, the IPython Notebook is:
 
-    "[...] a web-based interactive computational environment
-    where you can combine code execution, text, mathematics, plots and rich
-    media into a single document [...]"
+```
+"[...] a web-based interactive computational environment
+where you can combine code execution, text, mathematics, plots and rich
+media into a single document [...]"
+```
 
 This environment allows you to plot your charts in-line and also allows you to
 easily add surrounding text with Markdown. You can easily create Notebooks that
@@ -110,4 +110,6 @@ After the usual preparation steps for [contributing to a GitHub project](https:/
 
 While making changes and adding tests, run `make lint` and `make test` often to check for mistakes.
 
-After [commiting and pushing changes](https://docs.github.com/en/get-started/exploring-projects-on-github/contributing-to-a-project?tool=webui#making-and-pushing-changes), [create a Pull Request](https://docs.github.com/en/get-started/exploring-projects-on-github/contributing-to-a-project?tool=webui#making-a-pull-request) to discuss and get feedback on the proposed feature or fix.
+After [committing and pushing changes](https://docs.github.com/en/get-started/exploring-projects-on-github/contributing-to-a-project?tool=webui#making-and-pushing-changes), [create a Pull Request](https://docs.github.com/en/get-started/exploring-projects-on-github/contributing-to-a-project?tool=webui#making-a-pull-request) to discuss and get feedback on the proposed feature or fix.
+
+See the [development guide](docs/development.md) for uv setup, documentation builds, and Copier template updates.

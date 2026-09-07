@@ -1,0 +1,3 @@
+# Existing Sphinx source support; replace with a released Yardang version when available.
+yardang @ git+https://github.com/python-project-templates/yardang.git@a914146107acdff6fbcb90a7cf44250d543fc65c
+klink==0.1.10

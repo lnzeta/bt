@@ -41,11 +41,18 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = [
+develop = [
     "build",
+    "bump-my-version",
+    "check-dist",
+    "codespell",
     "cython>=0.29.25",
     "ffn>=1.1.2",
+    "hatchling",
+    "hatch-cython",
     "matplotlib>=2",
+    "mdformat",
+    "mdformat-tables>=1",
     "numpy>=1",
     "pandas>=0.19",
     "pyprind>=2.11",
@@ -54,12 +61,46 @@ dev = [
     "pytest-cov",
     "packaging>=24.2",
     "ruff",
+    "setuptools",
     "twine>=6.1",
+    "ty",
+    "uv",
     "wheel",
 ]
+dev = ["bt[develop]"]
 
 [project.urls]
 Homepage = "https://github.com/pmorissette/bt"
+Repository = "https://github.com/pmorissette/bt"
+Documentation = "https://pmorissette.github.io/bt/"
+
+[tool.bumpversion]
+current_version = "1.2.2"
+commit = true
+tag = true
+commit_args = "-s"
+
+[[tool.bumpversion.files]]
+filename = "bt/__init__.py"
+search = '__version__ = "{current_version}"'
+replace = '__version__ = "{new_version}"'
+
+[[tool.bumpversion.files]]
+filename = "pyproject.toml"
+search = 'version = "{current_version}"'
+replace = 'version = "{new_version}"'
+
+[tool.pytest.ini_options]
+addopts = ["-vvv", "--junitxml=junit.xml"]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+branch = true
+omit = ["bt/core.py"]
+
+[tool.coverage.report]
+exclude_also = ["raise NotImplementedError", "if __name__ == .__main__.:", "@(abc\\.)?abstractmethod"]
+fail_under = 50
 
 [tool.hatch.build.targets.sdist]
 include = [
@@ -88,8 +129,42 @@ exclude = [
     "*/backtest.py",
 ]
 
+[tool.setuptools]
+packages = ["bt"]
+
+[tool.check-dist]
+present = ["bt/__init__.py", "bt/algos.py", "bt/backtest.py", "bt/core.py"]
+absent = ["base/*", "yardang/*", "klink/*", "tests/*", "docs/*"]
+
+[tool.check-dist.sdist]
+present = ["LICENSE", "README.md", "pyproject.toml"]
+absent = ["bt/*.so", "bt/*.pyd", "bt/*.dylib"]
+
+[tool.check-dist.wheel]
+present = ["bt/core*.so"]
+
 [tool.ruff]
 line-length = 180
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401", "F403"]
+
+[tool.yardang]
+title = "bt - Flexible Backtesting for Python"
+theme = "klink"
+docs-host = "https://pmorissette.github.io/bt/"
+source-dir = "docs/source"
+root = "index.rst"
+pages = []
+use-autoapi = false
+use-search = false
+html-static-path = ["_static"]
+nb-execution-mode = "off"
+exclude-patterns = ["*.ipynb", "_themes"]
+extensions = ["sphinx.ext.intersphinx"]
+
+[tool.yardang.html-theme-options]
+github = "pmorissette/bt"
+
+[tool.yardang.intersphinx-mapping]
+ffn = ["https://pmorissette.github.io/ffn/", "https://pmorissette.github.io/ffn/objects.inv"]

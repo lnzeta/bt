@@ -37,6 +37,9 @@ htmlcov/
 nosetests.xml
 coverage.xml
 python_junit.xml
+junit.xml
+.pytest_cache/
+.venv/
 
 # Typing
 .mypy_cache/
@@ -58,6 +61,7 @@ python_junit.xml
 
 # Sphinx documentation
 docs/_build/
+docs/html/
 
 # vim .swp
 *.swp

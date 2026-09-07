@@ -20,7 +20,7 @@ def run(*backtests, progress_bar=None):
     object containing the results of the backtests.
 
     Args:
-        * backtest (*list): List of backtests.
+        * backtests (list): Backtests to run.
         * progress_bar (bool): Show progress bar. Defaults to True unless
           all backtests have progress_bar=False.
 
@@ -127,6 +127,7 @@ class Backtest:
         * additional_data (dict): Additional kwargs passed to StrategyBase.setup, after preprocessing
           This data can be retrieved by Algos using StrategyBase.get_data.
           The data may also be used by the Strategy itself, i.e.
+
             - ``bidoffer``: A DataFrame with the same format as 'data', will be used
               by the strategy for transaction cost modeling
             - ``coupons``: A DataFrame with the same format as 'data', will by used

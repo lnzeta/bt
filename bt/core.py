@@ -2157,7 +2157,7 @@ class SqrtCostModel(CostModel):
 
     Instantaneous impact as a fraction of price is
     ``I(x) = Y * sigma * sqrt(|x| / V)``. Integrating the impact profile
-    over a block trade yields the 2/3 prefactor on the cost:
+    over a block trade yields the 2/3 prefactor on the cost::
 
         cost = (2/3) * Y * sigma * |q| * sqrt(|q| / V) * p
 
@@ -2184,6 +2184,8 @@ class SqrtCostModel(CostModel):
 class AlmgrenChrissCostModel(CostModel):
     """
     Almgren-Chriss three-component transaction cost (Almgren & Chriss 2001).
+
+    The total cost is::
 
         cost =   0.5 * alpha * sigma * (|q|/V) * |q| * p   (permanent, triangular)
                + epsilon * |q| * p                         (linear temp: spread/fees)

@@ -1,5 +1,8 @@
 name: Deploy
 
+env:
+  UV_SYSTEM_PYTHON: '1'
+
 on:
   push:
     tags:
@@ -37,7 +40,7 @@ jobs:
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-    - uses: actions-ext/python/setup@main
+    - uses: actions-ext/python/setup@ec67f82b3bd863948308a41ecb9e70547cbb19c7
       with:
         version: ${{ matrix.python-version }}
 
@@ -108,7 +111,9 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
-        run: make develop
+        run: |
+          python -m pip install uv
+          make develop
 
       - name: Python SDist Steps
         run: python -m build -s

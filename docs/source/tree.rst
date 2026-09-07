@@ -131,6 +131,7 @@ When using :class:`FixedIncomeStrategy <bt.core.FixedIncomeStrategy>`,
 there are additional security types that are helpful due to the different
 treatment of their notional weight in the portfolio. These have no effect in a standard 
 :class:`Strategy <bt.core.Strategy>`.
+
   * :class:`FixedIncomeSecurity <bt.core.FixedIncomeSecurity>`: A
     :class:`Security <bt.core.Security>` for which position (rather than market value)
     will be used as the notional weight, i.e. a zero-coupon bond.
@@ -148,4 +149,3 @@ when needed. For more fine-grained control over which security types are used
 security nodes yourself before passing them to the strategy.
 
     
-
