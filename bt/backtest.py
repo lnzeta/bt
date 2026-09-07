@@ -544,7 +544,10 @@ class Result(ffn.GroupStats):
         self[key].display_monthly_returns()
 
     def get_monthly_max_drawdown(self):
-        """Return maximum drawdown calculated from month-end prices."""
+        """Return maximum drawdown from monthly-resampled prices.
+
+        The final, potentially incomplete month is included.
+        """
         return pd.Series(
             {key: self[key].monthly_prices.calc_max_drawdown() for key in self._names},
             name="monthly_max_drawdown",
