@@ -42,6 +42,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+    "build",
     "cython>=0.29.25",
     "ffn>=1.1.2",
     "matplotlib>=2",
