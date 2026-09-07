@@ -146,6 +146,9 @@ present = ["bt/core*.so"]
 [tool.ruff]
 line-length = 180
 
+[tool.ruff.lint.isort]
+known-third-party = ["klink", "yardang"]
+
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401", "F403"]
 
@@ -153,18 +156,41 @@ line-length = 180
 title = "bt - Flexible Backtesting for Python"
 theme = "klink"
 docs-host = "https://pmorissette.github.io/bt/"
-source-dir = "docs/source"
-root = "index.rst"
-pages = []
+root = "README.md"
+pages = [
+    "docs/source/install.rst",
+    "docs/source/intro.rst",
+    "docs/source/algos.rst",
+    "docs/source/tree.rst",
+    "docs/source/examples.rst",
+    "docs/source/overview.md",
+    "docs/development.md",
+]
 use-autoapi = false
 use-search = false
-html-static-path = ["_static"]
 nb-execution-mode = "off"
-exclude-patterns = ["*.ipynb", "_themes"]
+exclude-patterns = ["**/*.ipynb", "docs/source/_themes", "docs/source/index.rst", "TODO.md", "base", "benched", "klink", "yardang"]
 extensions = ["sphinx.ext.intersphinx"]
 
 [tool.yardang.html-theme-options]
 github = "pmorissette/bt"
 
-[tool.yardang.intersphinx-mapping]
-ffn = ["https://pmorissette.github.io/ffn/", "https://pmorissette.github.io/ffn/objects.inv"]
+[tool.yardang.redirects]
+bt = "docs/source/overview.html"
+"docs/source/bt" = "overview.html"
+install = "docs/source/install.html"
+algos = "docs/source/algos.html"
+tree = "docs/source/tree.html"
+examples = "docs/source/examples.html"
+intro = "docs/source/intro.html"
+modules = "docs/source/modules.html"
+Buy_and_hold = "docs/source/Buy_and_hold.html"
+Cost_Models = "docs/source/Cost_Models.html"
+ERC = "docs/source/ERC.html"
+Fixed_Income = "docs/source/Fixed_Income.html"
+PTE = "docs/source/PTE.html"
+Strategy_Combination = "docs/source/Strategy_Combination.html"
+Target_Volatility = "docs/source/Target_Volatility.html"
+Trend_1 = "docs/source/Trend_1.html"
+Trend_2 = "docs/source/Trend_2.html"
+examples-nb = "docs/source/examples-nb.html"

@@ -16,20 +16,20 @@ install:  ## install library
 build_dev: develop
 
 lint-py:  ## lint Python with ruff
-	python -m ruff check bt
-	python -m ruff format --check bt
+	python -m ruff check bt docs/build.py
+	python -m ruff format --check bt docs/build.py
 
 lint-docs:  ## lint contributor documentation
-	python -m mdformat --check README.md docs/development.md
-	python -m codespell_lib README.md docs/development.md
+	python -m mdformat --check README.md docs/development.md docs/source/overview.md
+	python -m codespell_lib README.md docs/development.md docs/source/overview.md
 
 fix-py:  ## autoformat Python code
-	python -m ruff check --fix bt
-	python -m ruff format bt
+	python -m ruff check --fix bt docs/build.py
+	python -m ruff format bt docs/build.py
 
 fix-docs:  ## autoformat contributor documentation
-	python -m mdformat README.md docs/development.md
-	python -m codespell_lib --write README.md docs/development.md
+	python -m mdformat README.md docs/development.md docs/source/overview.md
+	python -m codespell_lib --write README.md docs/development.md docs/source/overview.md
 
 lint: lint-py lint-docs  ## run all linters
 lints: lint
@@ -88,7 +88,7 @@ docs-develop:  ## install documentation dependencies
 	uv pip install -r docs/requirements.txt
 
 docs:  ## build documentation with Yardang and Klink
-	yardang build --warning-is-error
+	python docs/build.py
 
 serve:  ## serve built documentation on port 9087
 	python -m http.server 9087 --directory docs/html

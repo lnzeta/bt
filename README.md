@@ -1,115 +1,88 @@
-![](http://pmorissette.github.io/bt/_static/logo.png)
+# bt — Flexible Backtesting for Python
 
 [![Build Status](https://github.com/pmorissette/bt/workflows/Build%20Status/badge.svg)](https://github.com/pmorissette/bt/actions/)
 [![PyPI Version](https://img.shields.io/pypi/v/bt)](https://pypi.org/project/bt/)
 [![PyPI License](https://img.shields.io/pypi/l/bt)](https://pypi.org/project/bt/)
 
-# bt - Flexible Backtesting for Python
+<a id="what-is-bt"></a>
 
-bt is currently in alpha stage - if you find a bug, please submit an issue.
+Build, test, and compare investment strategies from reusable Python components.
+bt combines strategy logic with historical price data, tracks portfolio positions
+and transactions, and provides performance statistics and charts through
+[ffn](https://github.com/pmorissette/ffn).
 
-Read the docs here: http://pmorissette.github.io/bt.
+<a id="features"></a>
 
-## What is bt?
+- **Compose strategy logic:** combine algorithms for scheduling, security selection, weighting, and rebalancing.
+- **Build portfolios of strategies:** nest strategies and securities in a common tree.
+- **Model trading costs:** configure commissions and transaction cost models.
+- **Compare results:** inspect returns, weights, transactions, drawdowns, and other statistics.
 
-**bt** is a flexible backtesting framework for Python used to test quantitative
-trading strategies. **Backtesting** is the process of testing a strategy over a given
-data set. This framework allows you to easily create strategies that mix and match
-different [Algos](http://pmorissette.github.io/bt/bt.html#bt.core.Algo). It aims to foster the creation of easily testable, reusable and
-flexible blocks of strategy logic to facilitate the rapid development of complex
-trading strategies.
-
-The goal: to save **quants** from re-inventing the wheel and let them focus on the
-important part of the job - strategy development.
-
-**bt** is coded in **Python** and joins a vibrant and rich ecosystem for data analysis.
-Numerous libraries exist for machine learning, signal processing and statistics and can be leveraged to avoid
-re-inventing the wheel - something that happens all too often when using other
-languages that don't have the same wealth of high-quality, open-source projects.
-
-bt is built atop [ffn](https://github.com/pmorissette/ffn) - a financial function library for Python. Check it out!
-
-## Features
-
-- **Tree Structure**
-  [The tree structure](http://pmorissette.github.io/bt/tree.html) facilitates the construction and composition of complex algorithmic trading
-  strategies that are modular and reusable. Furthermore, each tree [Node](http://pmorissette.github.io/bt/bt.html#bt.core.Node) has its own
-  price index that can be used by Algos to determine a Node's allocation.
-
-- **Algorithm Stacks**
-  [Algos](http://pmorissette.github.io/bt/bt.html#bt.core.Algo) and [AlgoStacks](http://pmorissette.github.io/bt/bt.html#bt.core.AlgoStack) are
-  another core feature that facilitate the creation of modular and reusable strategy
-  logic. Due to their modularity, these logic blocks are also easier to test -
-  an important step in building robust financial solutions.
-
-- **Charting and Reporting**
-  bt also provides many useful charting functions that help visualize backtest
-  results. We also plan to add more charts, tables and report formats in the future,
-  such as automatically generated PDF reports.
-
-- **Detailed Statistics**
-  Furthermore, bt calculates a bunch of stats relating to a backtest and offers a quick way to compare
-  these various statistics across many different backtests via [Results](http://pmorissette.github.io/bt/bt.html#bt.backtest.Result) display methods.
-
-## Roadmap
-
-Future development efforts will focus on:
-
-- **Speed**
-  Due to the flexible nature of bt, a trade-off had to be made between
-  usability and performance. Usability will always be the priority, but we do
-  wish to enhance the performance as much as possible.
-
-- **Algos**
-  We will also be developing more algorithms as time goes on. We also
-  encourage anyone to contribute their own algos as well.
-
-- **Charting and Reporting**
-  This is another area we wish to constantly improve on
-  as reporting is an important aspect of the job. Charting and reporting also
-  facilitate finding bugs in strategy logic.
-
-## Installing bt
-
-The easiest way to install `bt` is from the [Python Package Index](https://pypi.python.org/pypi/bt/)
-using `pip`:
+## Install
 
 ```bash
 pip install bt
 ```
 
-Since bt has many dependencies, we strongly recommend installing the [Anaconda Scientific Python
-Distribution](https://store.continuum.io/cshop/anaconda/), especially on Windows. This distribution
-comes with many of the required packages pre-installed, including pip. Once Anaconda is installed, the above
-command should complete the installation.
+See the [installation guide](docs/source/install.rst) for additional details.
 
-## Recommended Setup
+<a id="a-quick-example"></a>
+<a id="a-simple-strategy-backtest"></a>
 
-We believe the best environment to develop with bt is the [IPython Notebook](http://ipython.org/notebook.html).
-From their homepage, the IPython Notebook is:
+## A first backtest
 
+This example uses synthetic prices, so it runs without downloading market data:
+
+```python
+import numpy as np
+import pandas as pd
+
+import bt
+
+prices = pd.DataFrame(
+    {
+        "asset_a": np.linspace(100, 120, 252),
+        "asset_b": np.linspace(100, 110, 252),
+    },
+    index=pd.bdate_range("2020-01-01", periods=252),
+)
+
+strategy = bt.Strategy(
+    "equal_weight",
+    [
+        bt.algos.RunMonthly(),
+        bt.algos.SelectAll(),
+        bt.algos.WeighEqually(),
+        bt.algos.Rebalance(),
+    ],
+)
+result = bt.run(bt.Backtest(strategy, prices))
+result.display()
 ```
-"[...] a web-based interactive computational environment
-where you can combine code execution, text, mathematics, plots and rich
-media into a single document [...]"
-```
 
-This environment allows you to plot your charts in-line and also allows you to
-easily add surrounding text with Markdown. You can easily create Notebooks that
-you can share with colleagues and you can also save them as PDFs. If you are not
-yet convinced, head over to their website.
+The strategy selects both assets, gives each equal weight, and rebalances monthly.
+Replace the synthetic prices with your own data to explore a strategy. Backtest
+results depend on data quality and modeling assumptions; they do not predict
+future performance.
 
-## Contributing to bt
+<a id="modifying-a-strategy"></a>
 
-A Makefile is available to simplify local development.
-[GNU Make](https://www.gnu.org/software/make/) is required to run the `make` targets directly, and it is not often preinstalled [on Windows systems](https://gnuwin32.sourceforge.net/packages/make.htm).
+## Explore the documentation
 
-When developing in Python, it's advisable to [create and activate a virtual environment](https://docs.python.org/3/library/venv.html) to keep the project's dependencies isolated from the system.
+- [First strategy tutorial](docs/source/intro.rst): walk through a backtest and inspect its results.
+- [Algorithms](docs/source/algos.rst): compose and customize strategy logic.
+- [Portfolio trees](docs/source/tree.rst): combine securities and nested strategies.
+- [Examples](docs/source/examples.rst): explore momentum, risk allocation, and fixed-income strategies.
+- [API overview](docs/source/overview.md): find strategy, algorithm, and backtest interfaces.
 
-After the usual preparation steps for [contributing to a GitHub project](https://docs.github.com/en/get-started/exploring-projects-on-github/contributing-to-a-project) (forking, cloning, creating a feature branch), run `make develop` to install dependencies in the environment.
+The published documentation is at <https://pmorissette.github.io/bt/>.
 
-While making changes and adding tests, run `make lint` and `make test` often to check for mistakes.
+<a id="roadmap"></a>
 
-After [committing and pushing changes](https://docs.github.com/en/get-started/exploring-projects-on-github/contributing-to-a-project?tool=webui#making-and-pushing-changes), [create a Pull Request](https://docs.github.com/en/get-started/exploring-projects-on-github/contributing-to-a-project?tool=webui#making-a-pull-request) to discuss and get feedback on the proposed feature or fix.
+## Contribute
 
-See the [development guide](docs/development.md) for uv setup, documentation builds, and Copier template updates.
+See the [development guide](docs/development.md) for environment setup, tests,
+documentation builds, and Copier template updates. Report bugs and propose
+improvements through [GitHub issues](https://github.com/pmorissette/bt/issues).
+
+bt is released under the [MIT license](LICENSE).

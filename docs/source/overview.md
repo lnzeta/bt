@@ -1,35 +1,42 @@
-bt Package
-==========
+# API overview
 
-:mod:`bt` Package
------------------
+bt's public interfaces are grouped below by module. For a worked example, start
+with the [first strategy tutorial](intro.rst).
 
+(id1)=
+
+## bt package
+
+```{eval-rst}
 .. automodule:: bt.__init__
     :members:
     :undoc-members:
     :show-inheritance:
+```
 
-:mod:`algos` Module
--------------------
+## Algorithms
 
+```{eval-rst}
 .. automodule:: bt.algos
     :members:
     :undoc-members:
     :show-inheritance:
+```
 
-:mod:`backtest` Module
-----------------------
+## Backtests and results
 
+```{eval-rst}
 .. automodule:: bt.backtest
     :members:
     :undoc-members:
     :show-inheritance:
+```
 
-:mod:`core` Module
-------------------
+## Strategies and securities
 
+```{eval-rst}
 .. automodule:: bt.core
     :members:
     :undoc-members:
     :show-inheritance:
-
+```
