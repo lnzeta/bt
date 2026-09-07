@@ -45,7 +45,7 @@ Pull requests build documentation and upload an HTML artifact. Successful pushes
 `.copier-answers.yaml` records the Python variant of [python-project-templates/base](https://github.com/python-project-templates/base) and the exact template revision. From a clean branch, update with:
 
 ```bash
-copier update --trust
+copier update --answers-file .copier-answers.yaml --trust
 ```
 
 Review the resulting diff and resolve conflicts before running the checks above. The Python Templates Copier Update GitHub App can propose updates automatically; installing that app is separate from this repository change.
