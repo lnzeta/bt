@@ -2255,9 +2255,10 @@ def test_hedge_risk():
 
 
 @pytest.mark.parametrize(("hedge_unit_risk", "hedge_multiplier"), [(1, 10), (10, 1)])
-def test_hedge_risk_security_multiplier(hedge_unit_risk: int, hedge_multiplier: int):
+@pytest.mark.parametrize("lazy_add", [False, True])
+def test_hedge_risk_security_multiplier(hedge_unit_risk: int, hedge_multiplier: int, lazy_add: bool):
     source = bt.Security("source")
-    hedge = bt.HedgeSecurity("hedge", multiplier=hedge_multiplier, lazy_add=True)
+    hedge = bt.HedgeSecurity("hedge", multiplier=hedge_multiplier, lazy_add=lazy_add)
     strategy = bt.Strategy("strategy", children=[source, hedge])
     dates = pd.date_range("2010-01-01", periods=1)
     prices = pd.DataFrame(100, index=dates, columns=["source", "hedge"])
