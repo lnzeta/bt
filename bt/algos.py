@@ -700,6 +700,12 @@ class SelectWhere(Algo):
     For example, this could be the result of a pandas boolean comparison such
     as data > 100.
 
+    Warning:
+        Signals derived from fundamental data are only point-in-time safe when
+        the data contains values known on each historical date. Data containing
+        later restatements introduces look-ahead bias. SelectWhere evaluates the
+        supplied signal as-is and cannot detect or correct restated values.
+
     Args:
         * signal (str|DataFrame): Boolean DataFrame containing selection logic.
           If a string is passed, frame is accessed using target.get_data
