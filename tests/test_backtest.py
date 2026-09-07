@@ -205,6 +205,31 @@ def test_Results_helper_functions():
     assert type(res.get_weights()) is pd.DataFrame
 
 
+def test_get_monthly_max_drawdown():
+    dates = pd.to_datetime(["2020-01-31", "2020-02-14", "2020-02-28", "2020-03-15"])
+    data = pd.DataFrame({"asset": [100.0, 50.0, 90.0, 80.0]}, index=dates)
+    strategy = bt.Strategy(
+        "strategy",
+        [bt.algos.RunOnce(), bt.algos.SelectAll(), bt.algos.WeighEqually(), bt.algos.Rebalance()],
+    )
+    second_data = pd.DataFrame({"asset": [100.0, 90.0, 110.0, 99.0]}, index=dates)
+    second_strategy = bt.Strategy(
+        "second",
+        [bt.algos.RunOnce(), bt.algos.SelectAll(), bt.algos.WeighEqually(), bt.algos.Rebalance()],
+    )
+
+    result = bt.run(
+        bt.Backtest(strategy, data, progress_bar=False),
+        bt.Backtest(second_strategy, second_data, progress_bar=False),
+    )
+
+    assert result["strategy"].max_drawdown == pytest.approx(-0.5)
+    pd.testing.assert_series_equal(
+        result.get_monthly_max_drawdown(),
+        pd.Series({"strategy": -0.2, "second": -0.1}, name="monthly_max_drawdown"),
+    )
+
+
 def test_Results_helper_functions_fi():
 
     names = ["foo", "bar"]
