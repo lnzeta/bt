@@ -91,7 +91,7 @@ Future development efforts will focus on:
 .. toctree::
    :maxdepth: 2
 
-    Overview <index>
+    Overview <self>
     Installation Guide <install>
     All About Algos <algos>
     The Tree Structure <tree>

@@ -12,7 +12,7 @@ your sophisticated trading ideas.  Here is a very simple diagram to help explain
     :align: center
     :alt: simple tree structure
 
-This diagram represents the strategy we tested in the :doc:`overview example <index>`. A simple :class:`strategy <bt.core.Strategy>` 
+This diagram represents the strategy we tested in the :doc:`overview example <intro>`. A simple :class:`strategy <bt.core.Strategy>`
 with two children that happen to be :class:`securities <bt.core.SecurityBase>`. However, children nodes don't have to be
 securities. They can also be strategies. This concept is very powerful as it
 allows you to combine strategies together and allocate capital dynamically
@@ -131,6 +131,7 @@ When using :class:`FixedIncomeStrategy <bt.core.FixedIncomeStrategy>`,
 there are additional security types that are helpful due to the different
 treatment of their notional weight in the portfolio. These have no effect in a standard 
 :class:`Strategy <bt.core.Strategy>`.
+
   * :class:`FixedIncomeSecurity <bt.core.FixedIncomeSecurity>`: A
     :class:`Security <bt.core.Security>` for which position (rather than market value)
     will be used as the notional weight, i.e. a zero-coupon bond.
@@ -148,4 +149,3 @@ when needed. For more fine-grained control over which security types are used
 security nodes yourself before passing them to the strategy.
 
     
-
