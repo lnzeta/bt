@@ -1523,8 +1523,9 @@ class TargetVol(Algo):
         * temp['weights']
 
     Raises:
-        * ValueError: if the estimated portfolio volatility is non-finite, or
-          if it is zero when an applicable non-zero target is requested.
+        * ValueError: if an applicable target or the estimated portfolio
+          volatility is non-finite, or if the estimated volatility is zero
+          when an applicable non-zero target is requested.
 
     """
 
@@ -1580,6 +1581,9 @@ class TargetVol(Algo):
         applicable_target_volatilities: list[float] = [target_volatility[k] for k in target.temp["weights"] if k in target_volatility]
         if not applicable_target_volatilities:
             return True
+
+        if not np.isfinite(applicable_target_volatilities).all():
+            raise ValueError("Cannot target a non-finite target volatility")
 
         if not np.isfinite(vol):
             raise ValueError("Cannot target volatility from a non-finite portfolio volatility")

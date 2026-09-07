@@ -1979,6 +1979,57 @@ def test_TargetVol_rejects_non_finite_volatility():
 
 
 @pytest.mark.parametrize("covar_method", ["standard", "ledoit-wolf"])
+@pytest.mark.parametrize("target_volatility", [np.nan, np.inf, -np.inf])
+@pytest.mark.parametrize("use_mapping", [False, True])
+def test_TargetVol_rejects_non_finite_target(covar_method, target_volatility, use_mapping):
+    dts = pd.date_range("2010-01-01", periods=5)
+    data = pd.DataFrame({"c1": [100.0, 102.0, 99.0, 103.0, 100.0]}, index=dts)
+    data["c2"] = data["c1"]
+    s = bt.Strategy("s")
+    s.setup(data)
+    s.update(dts[-1])
+    initial_weights = {"c1": 0.5, "c2": 0.5}
+    s.temp["weights"] = initial_weights.copy()
+    if use_mapping:
+        target_volatility = {"c1": 0.1, "c2": target_volatility}
+    target_vol_algo = algos.TargetVol(
+        target_volatility,
+        lookback=pd.DateOffset(days=4),
+        lag=pd.DateOffset(days=0),
+        covar_method=covar_method,
+    )
+
+    with pytest.raises(ValueError, match="non-finite target volatility"):
+        target_vol_algo(s)
+    assert s.temp["weights"] == initial_weights
+
+
+@pytest.mark.parametrize("covar_method", ["standard", "ledoit-wolf"])
+@pytest.mark.parametrize("integer_positions", [False, True])
+def test_TargetVol_zero_volatility_backtest(covar_method, integer_positions):
+    dts = pd.date_range("2010-01-01", periods=5)
+    data = pd.DataFrame({"c1": 100.0}, index=dts)
+    s = bt.Strategy(
+        "s",
+        [
+            algos.RunAfterDate(dts[-2]),
+            algos.WeighSpecified(c1=1.0),
+            algos.TargetVol(
+                0.1,
+                lookback=pd.DateOffset(days=4),
+                lag=pd.DateOffset(days=0),
+                covar_method=covar_method,
+            ),
+            algos.Rebalance(),
+        ],
+    )
+    backtest = bt.Backtest(s, data, integer_positions=integer_positions, progress_bar=False)
+
+    with pytest.raises(ValueError, match="zero-volatility"):
+        backtest.run()
+
+
+@pytest.mark.parametrize("covar_method", ["standard", "ledoit-wolf"])
 def test_PTE_Rebalance(covar_method):
 
     s = bt.Strategy("s")
