@@ -543,6 +543,13 @@ class Result(ffn.GroupStats):
         key = self._get_backtest(backtest)
         self[key].display_monthly_returns()
 
+    def get_monthly_max_drawdown(self):
+        """Return maximum drawdown calculated from month-end prices."""
+        return pd.Series(
+            {key: self[key].monthly_prices.calc_max_drawdown() for key in self._names},
+            name="monthly_max_drawdown",
+        )
+
     def get_weights(self, backtest=0, filter=None):
         """
 
