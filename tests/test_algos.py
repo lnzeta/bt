@@ -1437,6 +1437,44 @@ def test_stat_multi_period_return():
     assert strategy.temp["stat"]["c2"] == pytest.approx(0.65)
 
 
+def test_stat_multi_period_return_validation():
+    lookbacks = [pd.DateOffset(days=1), pd.DateOffset(days=2)]
+
+    with pytest.raises(ValueError, match="lookbacks cannot be empty"):
+        algos.StatMultiPeriodReturn([])
+    with pytest.raises(ValueError, match="same length"):
+        algos.StatMultiPeriodReturn(lookbacks, weights=[1])
+    with pytest.raises(ValueError, match="non-negative"):
+        algos.StatMultiPeriodReturn(lookbacks, weights=[-1, 2])
+    with pytest.raises(ValueError, match="sum to zero"):
+        algos.StatMultiPeriodReturn(lookbacks, weights=[0, 0])
+
+    algo = algos.StatMultiPeriodReturn(lookbacks, weights=[1e-9, 1e-9])
+    assert algo.weights == pytest.approx([0.5, 0.5])
+
+
+def test_stat_multi_period_return_lag_and_history():
+    dts = pd.date_range("2010-01-01", periods=5)
+    data = pd.DataFrame({"c1": [100.0, 110.0, 120.0, 130.0, 200.0]}, index=dts)
+    strategy = bt.Strategy("s")
+    strategy.setup(data)
+    strategy.update(dts[-1])
+    strategy.temp["selected"] = ["c1"]
+
+    algo = algos.StatMultiPeriodReturn(
+        [pd.DateOffset(days=1)],
+        lag=pd.DateOffset(days=1),
+    )
+    assert algo(strategy)
+    assert strategy.temp["stat"]["c1"] == pytest.approx(130.0 / 120.0 - 1)
+
+    algo = algos.StatMultiPeriodReturn(
+        [pd.DateOffset(days=1)],
+        lag=pd.DateOffset(days=5),
+    )
+    assert not algo(strategy)
+
+
 def test_select_n():
     algo = algos.SelectN(n=1, sort_descending=True)
 
@@ -1538,6 +1576,14 @@ def test_select_momentum_multiple_lookbacks():
     strategy.temp["selected"] = ["c1", "c2"]
     assert algos.SelectMomentum(n=1, lookback=lookbacks, weights=[10, 1])(strategy)
     assert strategy.temp["selected"] == ["c1"]
+
+    strategy.temp["selected"] = ["c1", "c2"]
+    lookbacks = np.array([pd.DateOffset(days=4)])
+    assert algos.SelectMomentum(n=1, lookback=lookbacks)(strategy)
+    assert strategy.temp["selected"] == ["c2"]
+
+    with pytest.raises(ValueError, match="weights require multiple"):
+        algos.SelectMomentum(n=1, weights=[1])
 
 
 def test_limit_weights():

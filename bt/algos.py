@@ -659,13 +659,14 @@ class SelectMomentum(AlgoStack):
 
     Args:
         * n (int): select first N elements
-        * lookback (DateOffset|list): lookback period for total return
-          calculation, or a list of periods whose returns are averaged
+        * lookback (DateOffset|sequence): lookback period for total return
+          calculation, or a sequence of periods whose returns are averaged
         * lag (DateOffset): Lag interval for total return calculation
         * sort_descending (bool): Sort descending (highest return is best)
         * all_or_none (bool): If true, only populates temp['selected'] if we
           have n items. If we have less than n, then temp['selected'] = [].
-        * weights (list): Optional weights for multiple lookback periods.
+        * weights (sequence): Optional non-negative weights for multiple
+          lookback periods.
 
     Sets:
         * selected
@@ -684,7 +685,7 @@ class SelectMomentum(AlgoStack):
         all_or_none=False,
         weights=None,
     ):
-        if isinstance(lookback, (list, tuple)):
+        if isinstance(lookback, (list, tuple, np.ndarray, pd.Index)):
             stat = StatMultiPeriodReturn(lookbacks=lookback, weights=weights, lag=lag)
         else:
             if weights is not None:
@@ -969,9 +970,10 @@ class StatMultiPeriodReturn(Algo):
     Sets temp['stat'] to the weighted average of multiple total returns.
 
     Args:
-        * lookbacks (list): DateOffset lookback periods.
-        * weights (list): Optional weight for each lookback. Equal weights are
-          used by default. Weights are normalized to sum to one.
+        * lookbacks (sequence): DateOffset lookback periods.
+        * weights (sequence): Optional non-negative weight for each lookback.
+          Equal weights are used by default. Weights are normalized to sum to
+          one.
         * lag (DateOffset): Lag interval. Each total return ends at now - lag.
 
     Sets:
@@ -993,7 +995,9 @@ class StatMultiPeriodReturn(Algo):
             raise ValueError("weights and lookbacks must have the same length")
 
         weights = np.asarray(weights, dtype=float)
-        if np.isclose(weights.sum(), 0.0):
+        if np.any(weights < 0):
+            raise ValueError("weights must be non-negative")
+        if weights.sum() == 0:
             raise ValueError("weights must not sum to zero")
         self.weights = weights / weights.sum()
         self.lag = lag
