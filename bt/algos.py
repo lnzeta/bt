@@ -1522,6 +1522,10 @@ class TargetVol(Algo):
     Requires:
         * temp['weights']
 
+    Raises:
+        * ValueError: if an applicable target or the estimated portfolio
+          volatility is non-finite, or if the estimated volatility is zero
+          when an applicable non-zero target is requested.
 
     """
 
@@ -1572,6 +1576,23 @@ class TargetVol(Algo):
             target_volatility = {k: self.target_volatility for k in target.temp["weights"]}
         else:
             target_volatility = self.target_volatility
+
+        # A target mapping may intentionally omit some or all current weights.
+        applicable_target_volatilities: list[float] = [target_volatility[k] for k in target.temp["weights"] if k in target_volatility]
+        if not applicable_target_volatilities:
+            return True
+
+        if not np.isfinite(applicable_target_volatilities).all():
+            raise ValueError("Cannot target a non-finite target volatility")
+
+        if not np.isfinite(vol):
+            raise ValueError("Cannot target volatility from a non-finite portfolio volatility")
+
+        if vol == 0:
+            # Scaling cannot create volatility from zero; zero is already a valid target.
+            if any(value != 0 for value in applicable_target_volatilities):
+                raise ValueError("Cannot target a non-zero volatility from a zero-volatility portfolio")
+            return True
 
         for k in target.temp["weights"]:
             if k in target_volatility:

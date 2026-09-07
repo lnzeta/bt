@@ -1918,6 +1918,118 @@ def test_TargetVol(covar_method):
 
 
 @pytest.mark.parametrize("covar_method", ["standard", "ledoit-wolf"])
+@pytest.mark.parametrize(
+    ("target_volatility", "expected_error"),
+    [
+        (0.1, "zero-volatility"),
+        ({"c1": 0.1}, "zero-volatility"),
+        (0.0, None),
+        ({"c1": 0.0}, None),
+        ({"c2": 0.1}, None),
+    ],
+)
+def test_TargetVol_zero_volatility(
+    covar_method: str,
+    target_volatility: "float | dict[str, float]",
+    expected_error: "str | None",
+):
+    s = bt.Strategy("s")
+    dts = pd.date_range("2010-01-01", periods=5)
+    data = pd.DataFrame(index=dts, columns=["c1"], data=100.0)
+
+    target_vol_algo = algos.TargetVol(
+        target_volatility,
+        lookback=pd.DateOffset(days=4),
+        lag=pd.DateOffset(days=0),
+        covar_method=covar_method,
+        annualization_factor=1,
+    )
+
+    s.setup(data)
+    s.update(dts[-1])
+    initial_weights = {"c1": 1.0}
+    s.temp["weights"] = initial_weights.copy()
+
+    # Preserve satisfied or omitted targets, and reject infeasible targets before mutation.
+    if expected_error is None:
+        assert target_vol_algo(s)
+    else:
+        with pytest.raises(ValueError, match=expected_error):
+            target_vol_algo(s)
+    assert s.temp["weights"] == initial_weights
+
+
+def test_TargetVol_rejects_non_finite_volatility():
+    s = bt.Strategy("s")
+    dts = pd.date_range("2010-01-01", periods=1)
+    data = pd.DataFrame(index=dts, columns=["c1"], data=100.0)
+    target_vol_algo = algos.TargetVol(
+        0.1,
+        lookback=pd.DateOffset(days=1),
+        lag=pd.DateOffset(days=0),
+        annualization_factor=1,
+    )
+
+    s.setup(data)
+    s.update(dts[-1])
+    s.temp["weights"] = {"c1": 1.0}
+
+    with pytest.raises(ValueError, match="non-finite"):
+        target_vol_algo(s)
+
+
+@pytest.mark.parametrize("covar_method", ["standard", "ledoit-wolf"])
+@pytest.mark.parametrize("target_volatility", [np.nan, np.inf, -np.inf])
+@pytest.mark.parametrize("use_mapping", [False, True])
+def test_TargetVol_rejects_non_finite_target(covar_method, target_volatility, use_mapping):
+    dts = pd.date_range("2010-01-01", periods=5)
+    data = pd.DataFrame({"c1": [100.0, 102.0, 99.0, 103.0, 100.0]}, index=dts)
+    data["c2"] = data["c1"]
+    s = bt.Strategy("s")
+    s.setup(data)
+    s.update(dts[-1])
+    initial_weights = {"c1": 0.5, "c2": 0.5}
+    s.temp["weights"] = initial_weights.copy()
+    if use_mapping:
+        target_volatility = {"c1": 0.1, "c2": target_volatility}
+    target_vol_algo = algos.TargetVol(
+        target_volatility,
+        lookback=pd.DateOffset(days=4),
+        lag=pd.DateOffset(days=0),
+        covar_method=covar_method,
+    )
+
+    with pytest.raises(ValueError, match="non-finite target volatility"):
+        target_vol_algo(s)
+    assert s.temp["weights"] == initial_weights
+
+
+@pytest.mark.parametrize("covar_method", ["standard", "ledoit-wolf"])
+@pytest.mark.parametrize("integer_positions", [False, True])
+def test_TargetVol_zero_volatility_backtest(covar_method, integer_positions):
+    dts = pd.date_range("2010-01-01", periods=5)
+    data = pd.DataFrame({"c1": 100.0}, index=dts)
+    s = bt.Strategy(
+        "s",
+        [
+            algos.RunAfterDate(dts[-2]),
+            algos.WeighSpecified(c1=1.0),
+            algos.TargetVol(
+                0.1,
+                lookback=pd.DateOffset(days=4),
+                lag=pd.DateOffset(days=0),
+                covar_method=covar_method,
+            ),
+            algos.Rebalance(),
+        ],
+    )
+    backtest = bt.Backtest(s, data, integer_positions=integer_positions, progress_bar=False)
+
+    with pytest.raises(ValueError, match="zero-volatility"):
+        backtest.run()
+
+
+@pytest.mark.parametrize("covar_method", ["standard", "ledoit-wolf"])
 def test_PTE_Rebalance(covar_method):
 
     s = bt.Strategy("s")
