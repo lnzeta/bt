@@ -1,8 +1,8 @@
 # Changes here will be overwritten by Copier
-_commit: f4832e60f5cd56fe87d3948557f46c26ea26a67c
+_commit: 4dfea45
 _src_path: https://github.com/python-project-templates/base.git
 add_docs: true
-add_extension: python
+add_extension: cython
 add_wiki: false
 email: morissette.philippe@gmail.com
 github: pmorissette

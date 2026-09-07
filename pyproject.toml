@@ -45,6 +45,7 @@ develop = [
     "build",
     "bump-my-version",
     "check-dist",
+    "cibuildwheel",
     "codespell",
     "cython>=0.29.25",
     "ffn>=1.1.2",
@@ -143,6 +144,23 @@ absent = ["bt/*.so", "bt/*.pyd", "bt/*.dylib"]
 [tool.check-dist.wheel]
 present = ["bt/core*.so"]
 
+[tool.cibuildwheel]
+test-command = "python -c \"import bt.core; from importlib.machinery import EXTENSION_SUFFIXES; assert any(bt.core.__file__.endswith(s) for s in EXTENSION_SUFFIXES)\""
+
+[tool.cibuildwheel.linux]
+manylinux-aarch64-image = "manylinux_2_28"
+manylinux-x86_64-image = "manylinux_2_28"
+archs = "native"
+skip = "*i686* *musllinux*"
+
+[tool.cibuildwheel.macos]
+environment = {MACOSX_DEPLOYMENT_TARGET="11.0"}
+archs = "arm64"
+
+[tool.cibuildwheel.windows]
+archs = "AMD64"
+skip = "*win32 *arm64"
+
 [tool.ruff]
 line-length = 180
 
@@ -169,7 +187,7 @@ pages = [
 use-autoapi = false
 use-search = false
 nb-execution-mode = "off"
-exclude-patterns = ["**/*.ipynb", "docs/source/_themes", "docs/source/index.rst", "TODO.md", "base", "benched", "klink", "yardang"]
+exclude-patterns = ["**/*.ipynb", "docs/source/_themes", "docs/source/index.rst", "TODO.md", "base", "benched", "github", "klink", "python-template-cython", "yardang"]
 extensions = ["sphinx.ext.intersphinx"]
 
 [tool.yardang.html-theme-options]

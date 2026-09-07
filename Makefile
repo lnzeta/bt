@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: develop requirements build install build_dev lint-py lint-docs fix-py fix-docs lint lints fix format check-dist check-types checks check test tests coverage benchmark show-version patch minor major dist dist-build dist-check publish upload docs docs-develop serve notebooks clean help
+.PHONY: develop requirements build install build_dev lint-py lint-docs fix-py fix-docs lint lints fix format check-dist check-types checks check test tests coverage benchmark show-version patch minor major dist dist-build dist-py-wheel dist-py-sdist dist-check test-dist publish upload docs docs-develop serve notebooks clean help
 
 develop:  ## install dependencies and build library
 	uv pip install -e '.[develop]'
@@ -16,16 +16,16 @@ install:  ## install library
 build_dev: develop
 
 lint-py:  ## lint Python with ruff
-	python -m ruff check bt docs/build.py
-	python -m ruff format --check bt docs/build.py
+	python -m ruff check bt .github/scripts docs/build.py
+	python -m ruff format --check bt .github/scripts docs/build.py
 
 lint-docs:  ## lint contributor documentation
 	python -m mdformat --check README.md docs/development.md docs/source/overview.md
 	python -m codespell_lib README.md docs/development.md docs/source/overview.md
 
 fix-py:  ## autoformat Python code
-	python -m ruff check --fix bt docs/build.py
-	python -m ruff format bt docs/build.py
+	python -m ruff check --fix bt .github/scripts docs/build.py
+	python -m ruff format bt .github/scripts docs/build.py
 
 fix-docs:  ## autoformat contributor documentation
 	python -m mdformat README.md docs/development.md docs/source/overview.md
@@ -71,8 +71,17 @@ major:  ## bump a major version
 dist-build:  ## build Python distributions
 	python -m build -w -s
 
+dist-py-wheel: dist-py-sdist  ## build portable native wheels from the sdist
+	python -m cibuildwheel --output-dir dist dist/*.tar.gz
+
+dist-py-sdist:  ## build a source distribution
+	python -m build --sdist --outdir dist
+
 dist-check:  ## check distribution metadata
 	python -m twine check dist/*
+
+test-dist:  ## test installed wheels and rebuild source distributions
+	python .github/scripts/test-distributions.py
 
 dist:  ## build and check distributions
 	$(MAKE) clean

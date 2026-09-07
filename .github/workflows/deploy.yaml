@@ -1,8 +1,5 @@
 name: Deploy
 
-env:
-  UV_SYSTEM_PYTHON: '1'
-
 on:
   push:
     tags:
