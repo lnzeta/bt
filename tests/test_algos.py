@@ -1417,6 +1417,26 @@ def test_stat_total_return():
     assert stat["c2"] == pytest.approx(95.0 / 100 - 1)
 
 
+def test_stat_multi_period_return():
+    dts = pd.date_range("2010-01-01", periods=5)
+    data = pd.DataFrame(
+        {
+            "c1": [100.0, 100.0, 100.0, 100.0, 130.0],
+            "c2": [50.0, 100.0, 100.0, 100.0, 110.0],
+        },
+        index=dts,
+    )
+    strategy = bt.Strategy("s")
+    strategy.setup(data)
+    strategy.update(dts[-1])
+    strategy.temp["selected"] = ["c1", "c2"]
+    algo = algos.StatMultiPeriodReturn(lookbacks=[pd.DateOffset(days=1), pd.DateOffset(days=4)])
+
+    assert algo(strategy)
+    assert strategy.temp["stat"]["c1"] == pytest.approx(0.3)
+    assert strategy.temp["stat"]["c2"] == pytest.approx(0.65)
+
+
 def test_select_n():
     algo = algos.SelectN(n=1, sort_descending=True)
 
@@ -1495,6 +1515,29 @@ def test_select_momentum():
     actual = s.temp["selected"]
     assert len(actual) == 1
     assert "c1" in actual
+
+
+def test_select_momentum_multiple_lookbacks():
+    dts = pd.date_range("2010-01-01", periods=5)
+    data = pd.DataFrame(
+        {
+            "c1": [100.0, 100.0, 100.0, 100.0, 130.0],
+            "c2": [50.0, 100.0, 100.0, 100.0, 110.0],
+        },
+        index=dts,
+    )
+    strategy = bt.Strategy("s")
+    strategy.setup(data)
+    strategy.update(dts[-1])
+    strategy.temp["selected"] = ["c1", "c2"]
+    lookbacks = [pd.DateOffset(days=1), pd.DateOffset(days=4)]
+
+    assert algos.SelectMomentum(n=1, lookback=lookbacks)(strategy)
+    assert strategy.temp["selected"] == ["c2"]
+
+    strategy.temp["selected"] = ["c1", "c2"]
+    assert algos.SelectMomentum(n=1, lookback=lookbacks, weights=[10, 1])(strategy)
+    assert strategy.temp["selected"] == ["c1"]
 
 
 def test_limit_weights():

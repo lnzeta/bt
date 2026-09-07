@@ -659,12 +659,13 @@ class SelectMomentum(AlgoStack):
 
     Args:
         * n (int): select first N elements
-        * lookback (DateOffset): lookback period for total return
-          calculation
+        * lookback (DateOffset|list): lookback period for total return
+          calculation, or a list of periods whose returns are averaged
         * lag (DateOffset): Lag interval for total return calculation
         * sort_descending (bool): Sort descending (highest return is best)
         * all_or_none (bool): If true, only populates temp['selected'] if we
           have n items. If we have less than n, then temp['selected'] = [].
+        * weights (list): Optional weights for multiple lookback periods.
 
     Sets:
         * selected
@@ -681,9 +682,17 @@ class SelectMomentum(AlgoStack):
         lag=_DEFAULT_LAG,
         sort_descending=True,
         all_or_none=False,
+        weights=None,
     ):
+        if isinstance(lookback, (list, tuple)):
+            stat = StatMultiPeriodReturn(lookbacks=lookback, weights=weights, lag=lag)
+        else:
+            if weights is not None:
+                raise ValueError("weights require multiple lookback periods")
+            stat = StatTotalReturn(lookback=lookback, lag=lag)
+
         super().__init__(
-            StatTotalReturn(lookback=lookback, lag=lag),
+            stat,
             SelectN(n=n, sort_descending=sort_descending, all_or_none=all_or_none),
         )
 
@@ -952,6 +961,51 @@ class StatTotalReturn(Algo):
             return False
         prc = target.universe.loc[t0 - self.lookback : t0, selected]
         target.temp["stat"] = prc.calc_total_return()
+        return True
+
+
+class StatMultiPeriodReturn(Algo):
+    """
+    Sets temp['stat'] to the weighted average of multiple total returns.
+
+    Args:
+        * lookbacks (list): DateOffset lookback periods.
+        * weights (list): Optional weight for each lookback. Equal weights are
+          used by default. Weights are normalized to sum to one.
+        * lag (DateOffset): Lag interval. Each total return ends at now - lag.
+
+    Sets:
+        * stat
+
+    Requires:
+        * selected
+    """
+
+    def __init__(self, lookbacks, weights=None, lag=_DEFAULT_LAG):
+        super().__init__()
+        self.lookbacks = list(lookbacks)
+        if not self.lookbacks:
+            raise ValueError("lookbacks cannot be empty")
+
+        if weights is None:
+            weights = np.ones(len(self.lookbacks))
+        elif len(weights) != len(self.lookbacks):
+            raise ValueError("weights and lookbacks must have the same length")
+
+        weights = np.asarray(weights, dtype=float)
+        if np.isclose(weights.sum(), 0.0):
+            raise ValueError("weights must not sum to zero")
+        self.weights = weights / weights.sum()
+        self.lag = lag
+
+    def __call__(self, target):
+        selected = target.temp["selected"]
+        t0 = target.now - self.lag
+        if target.universe[selected].index[0] > t0:
+            return False
+
+        returns = [target.universe.loc[t0 - lookback : t0, selected].calc_total_return() for lookback in self.lookbacks]
+        target.temp["stat"] = pd.concat(returns, axis=1).dot(self.weights)
         return True
 
 
