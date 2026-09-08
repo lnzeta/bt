@@ -162,6 +162,55 @@ def test_can_disable_progress_bar_from_run():
     assert  len(result.get_transactions()) > 0
 
 
+@pytest.mark.parametrize("missing_position", [0, 2, 3])
+@pytest.mark.parametrize("already_run", [False, True])
+def test_benchmark_random_preserves_partial_missing_dates(missing_position, already_run):
+    dates = pd.date_range("2020-01-01", periods=4)
+    data = pd.DataFrame(
+        {"a": [100.0, 150.0, 75.0, 100.0], "unused": 100.0},
+        index=dates,
+    )
+    data.loc[dates[missing_position], "unused"] = np.nan
+
+    # Both strategies select only a, so missing data for the unused asset cannot change returns.
+    def make_strategy(name: str) -> bt.Strategy:
+        return bt.Strategy(
+            name,
+            [
+                bt.algos.RunOnce(),
+                bt.algos.SelectThese(["a"]),
+                bt.algos.WeighEqually(),
+                bt.algos.Rebalance(),
+            ],
+        )
+
+    backtest = bt.Backtest(make_strategy("original"), data, progress_bar=False)
+    if already_run:
+        backtest.run()
+    original_data = backtest.data.copy(deep=True)
+    result = bt.backtest.benchmark_random(backtest, make_strategy("random"), nsim=2)
+
+    # Reconstructing a Backtest must replace only its synthetic row and preserve the real timeline.
+    pd.testing.assert_frame_equal(backtest.data, original_data)
+    expected_drawdown = 75.0 / 150.0 - 1.0
+    assert result.stats.loc["max_drawdown", "original"] == pytest.approx(expected_drawdown)
+    for name in ["random_0", "random_1"]:
+        pd.testing.assert_frame_equal(result.backtests[name].data, original_data)
+        assert result.stats.loc["max_drawdown", name] == pytest.approx(expected_drawdown)
+
+
+def test_benchmark_random_preserves_all_missing_dates():
+    dates = pd.date_range("2020-01-01", periods=5, tz="UTC")
+    data = pd.DataFrame({"a": [np.nan, 100.0, np.nan, 110.0, np.nan]}, index=dates)
+    # Stay in cash so an entirely missing real row does not require pricing a holding.
+    backtest = bt.Backtest(bt.Strategy("original"), data, progress_bar=False)
+    result = bt.backtest.benchmark_random(backtest, bt.Strategy("random"), nsim=2)
+
+    for name in ["original", "random_0", "random_1"]:
+        pd.testing.assert_frame_equal(result.backtests[name].data, backtest.data)
+        pd.testing.assert_index_equal(result.backtests[name].dates[1:], dates)
+
+
 def test_Results_helper_functions():
 
     names = ["foo", "bar"]
