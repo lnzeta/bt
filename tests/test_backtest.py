@@ -162,6 +162,36 @@ def test_can_disable_progress_bar_from_run():
     assert  len(result.get_transactions()) > 0
 
 
+def test_benchmark_random_preserves_partial_missing_dates():
+    dates = pd.date_range("2020-01-01", periods=4)
+    data = pd.DataFrame(
+        {"a": [100.0, 150.0, 75.0, 100.0], "unused": [100.0, 100.0, np.nan, 100.0]},
+        index=dates,
+    )
+
+    # Both strategies select only a, so missing data for the unused asset cannot change returns.
+    def make_strategy(name: str) -> bt.Strategy:
+        return bt.Strategy(
+            name,
+            [
+                bt.algos.RunOnce(),
+                bt.algos.SelectThese(["a"]),
+                bt.algos.WeighEqually(),
+                bt.algos.Rebalance(),
+            ],
+        )
+
+    backtest = bt.Backtest(make_strategy("original"), data, progress_bar=False)
+    result = bt.backtest.benchmark_random(backtest, make_strategy("random"), nsim=1)
+    random_backtest: bt.Backtest = result.backtests["random_0"]
+
+    # Reconstructing a Backtest must replace only its synthetic row and preserve the real timeline.
+    pd.testing.assert_frame_equal(random_backtest.data, backtest.data)
+    expected_drawdown = 75.0 / 150.0 - 1.0
+    assert result.stats.loc["max_drawdown", "original"] == pytest.approx(expected_drawdown)
+    assert result.stats.loc["max_drawdown", "random_0"] == pytest.approx(expected_drawdown)
+
+
 def test_Results_helper_functions():
 
     names = ["foo", "bar"]

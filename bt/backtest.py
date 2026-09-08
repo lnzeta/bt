@@ -51,6 +51,9 @@ def benchmark_random(backtest, random_strategy, nsim=100):
     randomly picking weight? Or randomly picking the selected
     securities?
 
+    Random backtests preserve every date from the original supplied
+    market data, including dates with partial missing values.
+
     Args:
         * backtest (Backtest): A backtest you want to benchmark
         * random_strategy (Strategy): A strategy you want to benchmark
@@ -72,7 +75,8 @@ def benchmark_random(backtest, random_strategy, nsim=100):
 
     bts = []
     bts.append(backtest)
-    data = backtest.data.dropna()
+    # Remove only Backtest's synthetic first row without dropping real partial rows.
+    data = backtest.data.iloc[1:]
 
     # create and run random backtests
     for i in tqdm(range(nsim)):
