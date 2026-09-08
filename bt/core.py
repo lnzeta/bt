@@ -1597,8 +1597,16 @@ class SecurityBase(Node):
                 if self.integer_positions:
                     full_outlay_of_1_more, _, _, _ = self.outlay(q + 1)
 
-                    if full_outlay < amount and full_outlay_of_1_more > amount:
-                        break
+                    if full_outlay < amount:
+                        if full_outlay_of_1_more > amount:
+                            break
+
+                        # The root-search step can skip an affordable integer
+                        # quantity when commissions are non-linear. Move back
+                        # one share so the search keeps the closest affordable
+                        # outlay instead of treating the larger gap as an error.
+                        q += 1
+                        full_outlay = full_outlay_of_1_more
 
                 # if not integer positions then we should keep going until
                 # full_outlay == amount or is close enough
@@ -2161,7 +2169,7 @@ class SqrtCostModel(CostModel):
 
     Instantaneous impact as a fraction of price is
     ``I(x) = Y * sigma * sqrt(|x| / V)``. Integrating the impact profile
-    over a block trade yields the 2/3 prefactor on the cost:
+    over a block trade yields the 2/3 prefactor on the cost::
 
         cost = (2/3) * Y * sigma * |q| * sqrt(|q| / V) * p
 
@@ -2188,6 +2196,8 @@ class SqrtCostModel(CostModel):
 class AlmgrenChrissCostModel(CostModel):
     """
     Almgren-Chriss three-component transaction cost (Almgren & Chriss 2001).
+
+    The total cost is::
 
         cost =   0.5 * alpha * sigma * (|q|/V) * |q| * p   (permanent, triangular)
                + epsilon * |q| * p                         (linear temp: spread/fees)

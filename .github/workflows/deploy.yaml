@@ -13,6 +13,7 @@ jobs:
       matrix:
         os:
           - ubuntu-latest
+          - ubuntu-24.04-arm
           - macos-latest
           - windows-latest
         python-version:
@@ -36,7 +37,7 @@ jobs:
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-    - uses: actions-ext/python/setup@main
+    - uses: actions-ext/python/setup@ec67f82b3bd863948308a41ecb9e70547cbb19c7
       with:
         version: ${{ matrix.python-version }}
 
@@ -48,17 +49,11 @@ jobs:
     - name: Install cibuildwheel
       run: python -m pip install cibuildwheel
 
-    - name: Set up QEMU
-      uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4.2.0
-      with:
-        platforms: all
-      if: runner.os == 'Linux'
-
     - name: Python Wheel Steps (Linux - cibuildwheel)
       run: python -m cibuildwheel --output-dir dist
       env:
         CIBW_BUILD: "${{ matrix.cibuildwheel }}-manylinux*"
-        CIBW_ARCHS_LINUX: x86_64 aarch64
+        CIBW_ARCHS_LINUX: native
         CIBW_BUILD_VERBOSITY: 3
       if: ${{ runner.os == 'Linux' }}
 
@@ -113,7 +108,9 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
-        run: make develop
+        run: |
+          python -m pip install uv
+          make develop
 
       - name: Python SDist Steps
         run: python -m build -s

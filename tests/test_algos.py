@@ -147,6 +147,49 @@ def test_run_daily():
     assert algo(target)
 
 
+@pytest.mark.parametrize(
+    "dates,expected_start,expected_end",
+    [
+        (pd.date_range("2015-12-28", periods=9), "2016-01-04", "2016-01-03"),
+        (pd.date_range("2018-12-28", periods=9), "2018-12-31", "2018-12-30"),
+        (
+            pd.to_datetime(["2018-12-27", "2018-12-28", "2018-12-31", "2019-01-02", "2019-01-03"]),
+            "2018-12-31",
+            "2018-12-28",
+        ),
+    ],
+)
+@pytest.mark.parametrize("run_on_end_of_period", [False, True])
+@pytest.mark.parametrize("timezone", [None, "America/New_York"])
+def test_run_weekly_does_not_split_an_iso_week_at_new_year(
+    dates, expected_start, expected_end, run_on_end_of_period, timezone
+):
+    class RecordDates(bt.Algo):
+        def __init__(self):
+            self.dates = []
+
+        def __call__(self, target):
+            self.dates.append(target.now)
+            return True
+
+    data = pd.DataFrame({"asset": 100.0}, index=dates.tz_localize(timezone))
+    strategy = bt.Strategy(
+        "weekly",
+        [
+            algos.RunWeekly(
+                run_on_first_date=False,
+                run_on_end_of_period=run_on_end_of_period,
+            ),
+            RecordDates(),
+        ],
+    )
+    backtest = bt.Backtest(strategy, data)
+    backtest.run()
+
+    expected = expected_end if run_on_end_of_period else expected_start
+    assert backtest.strategy.stack.algos[1].dates == [pd.Timestamp(expected, tz=timezone)]
+
+
 def test_run_weekly():
     dts = pd.date_range("2010-01-01", periods=367)
     data = pd.DataFrame(index=dts, columns=["c1", "c2"], data=100)
@@ -372,6 +415,20 @@ def test_run_if_out_of_bounds():
     assert not algo(s)
     s.children["c1"]._weight = 0.76
     s.children["c2"]._weight = 0.24
+    assert algo(s)
+
+    s.temp["weights"] = {"c1": 0.0, "c2": 0.5}
+    s.children["c1"]._weight = 0.0
+    s.children["c2"]._weight = 0.5
+    assert not algo(s)
+
+    s.children["c1"]._weight = 0.2
+    assert algo(s)
+    s.children["c1"]._weight = -0.2
+    assert algo(s)
+
+    s.children["c1"]._weight = 0.0
+    s.children["c2"]._weight = 0.9
     assert algo(s)
 
 
@@ -963,6 +1020,32 @@ def test_select_where_legacy():
     assert s.temp["selected"] == ["c2"]
 
 
+def test_select_where_missing_date():
+    dts = pd.date_range("2010-01-01", periods=2)
+    data = pd.DataFrame(index=dts, columns=["c1", "c2"], data=100.0)
+    signal = pd.DataFrame([[True, False]], index=[dts[0]], columns=data.columns)
+    s = bt.Strategy("s")
+    s.setup(data, where=signal)
+    s.update(dts[1])
+
+    assert not algos.SelectWhere("where")(s)
+    assert "selected" not in s.temp
+
+
+def test_select_where_missing_date_stops_algo_stack():
+    dts = pd.date_range("2010-01-01", periods=2)
+    data = pd.DataFrame(index=dts, columns=["c1", "c2"], data=100.0)
+    signal = pd.DataFrame([[True, False]], index=[dts[0]], columns=data.columns)
+    s = bt.Strategy("s")
+    s.setup(data)
+    s.update(dts[1])
+
+    stack = bt.AlgoStack(algos.SelectAll(), algos.SelectWhere(signal), algos.WeighEqually())
+    assert not stack(s)
+    assert s.temp["selected"] == ["c1", "c2"]
+    assert "weights" not in s.temp
+
+
 def test_select_regex():
     s = bt.Strategy("s")
     algo = algos.SelectRegex("c1")
@@ -1377,6 +1460,64 @@ def test_stat_total_return():
     assert stat["c2"] == pytest.approx(95.0 / 100 - 1)
 
 
+def test_stat_multi_period_return():
+    dts = pd.date_range("2010-01-01", periods=5)
+    data = pd.DataFrame(
+        {
+            "c1": [100.0, 100.0, 100.0, 100.0, 130.0],
+            "c2": [50.0, 100.0, 100.0, 100.0, 110.0],
+        },
+        index=dts,
+    )
+    strategy = bt.Strategy("s")
+    strategy.setup(data)
+    strategy.update(dts[-1])
+    strategy.temp["selected"] = ["c1", "c2"]
+    algo = algos.StatMultiPeriodReturn(lookbacks=[pd.DateOffset(days=1), pd.DateOffset(days=4)])
+
+    assert algo(strategy)
+    assert strategy.temp["stat"]["c1"] == pytest.approx(0.3)
+    assert strategy.temp["stat"]["c2"] == pytest.approx(0.65)
+
+
+def test_stat_multi_period_return_validation():
+    lookbacks = [pd.DateOffset(days=1), pd.DateOffset(days=2)]
+
+    with pytest.raises(ValueError, match="lookbacks cannot be empty"):
+        algos.StatMultiPeriodReturn([])
+    with pytest.raises(ValueError, match="same length"):
+        algos.StatMultiPeriodReturn(lookbacks, weights=[1])
+    with pytest.raises(ValueError, match="non-negative"):
+        algos.StatMultiPeriodReturn(lookbacks, weights=[-1, 2])
+    with pytest.raises(ValueError, match="sum to zero"):
+        algos.StatMultiPeriodReturn(lookbacks, weights=[0, 0])
+
+    algo = algos.StatMultiPeriodReturn(lookbacks, weights=[1e-9, 1e-9])
+    assert algo.weights == pytest.approx([0.5, 0.5])
+
+
+def test_stat_multi_period_return_lag_and_history():
+    dts = pd.date_range("2010-01-01", periods=5)
+    data = pd.DataFrame({"c1": [100.0, 110.0, 120.0, 130.0, 200.0]}, index=dts)
+    strategy = bt.Strategy("s")
+    strategy.setup(data)
+    strategy.update(dts[-1])
+    strategy.temp["selected"] = ["c1"]
+
+    algo = algos.StatMultiPeriodReturn(
+        [pd.DateOffset(days=1)],
+        lag=pd.DateOffset(days=1),
+    )
+    assert algo(strategy)
+    assert strategy.temp["stat"]["c1"] == pytest.approx(130.0 / 120.0 - 1)
+
+    algo = algos.StatMultiPeriodReturn(
+        [pd.DateOffset(days=1)],
+        lag=pd.DateOffset(days=5),
+    )
+    assert not algo(strategy)
+
+
 def test_select_n():
     algo = algos.SelectN(n=1, sort_descending=True)
 
@@ -1455,6 +1596,37 @@ def test_select_momentum():
     actual = s.temp["selected"]
     assert len(actual) == 1
     assert "c1" in actual
+
+
+def test_select_momentum_multiple_lookbacks():
+    dts = pd.date_range("2010-01-01", periods=5)
+    data = pd.DataFrame(
+        {
+            "c1": [100.0, 100.0, 100.0, 100.0, 130.0],
+            "c2": [50.0, 100.0, 100.0, 100.0, 110.0],
+        },
+        index=dts,
+    )
+    strategy = bt.Strategy("s")
+    strategy.setup(data)
+    strategy.update(dts[-1])
+    strategy.temp["selected"] = ["c1", "c2"]
+    lookbacks = [pd.DateOffset(days=1), pd.DateOffset(days=4)]
+
+    assert algos.SelectMomentum(n=1, lookback=lookbacks)(strategy)
+    assert strategy.temp["selected"] == ["c2"]
+
+    strategy.temp["selected"] = ["c1", "c2"]
+    assert algos.SelectMomentum(n=1, lookback=lookbacks, weights=[10, 1])(strategy)
+    assert strategy.temp["selected"] == ["c1"]
+
+    strategy.temp["selected"] = ["c1", "c2"]
+    lookbacks = np.array([pd.DateOffset(days=4)])
+    assert algos.SelectMomentum(n=1, lookback=lookbacks)(strategy)
+    assert strategy.temp["selected"] == ["c2"]
+
+    with pytest.raises(ValueError, match="weights require multiple"):
+        algos.SelectMomentum(n=1, weights=[1])
 
 
 def test_limit_weights():
@@ -1717,7 +1889,8 @@ def test_or():
     assert orAlgo(target)
 
 
-def test_TargetVol():
+@pytest.mark.parametrize("covar_method", ["standard", "ledoit-wolf"])
+def test_TargetVol(covar_method):
 
     s = bt.Strategy("s")
 
@@ -1741,12 +1914,13 @@ def test_TargetVol():
     data.loc[dts[4], "c2"] = 99
     data.loc[dts[5], "c2"] = 101
     data.loc[dts[6], "c2"] = 99
+    data["c3"] = data["c2"]
 
     targetVolAlgo = algos.TargetVol(
         0.1,
         lookback=pd.DateOffset(days=5),
         lag=pd.DateOffset(days=1),
-        covar_method="standard",
+        covar_method=covar_method,
         annualization_factor=1,
     )
 
@@ -1761,11 +1935,16 @@ def test_TargetVol():
 
     unannualized_c2_weight = weights["c1"]
 
+    s.temp["weights"] = {"c3": 1.0}
+    assert targetVolAlgo(s)
+    assert targetVolAlgo.target_volatility == 0.1
+    assert not np.isclose(s.temp["weights"]["c3"], 1.0)
+
     targetVolAlgo = algos.TargetVol(
         0.1 * np.sqrt(252),
         lookback=pd.DateOffset(days=5),
         lag=pd.DateOffset(days=1),
-        covar_method="standard",
+        covar_method=covar_method,
         annualization_factor=252,
     )
 
@@ -1781,7 +1960,120 @@ def test_TargetVol():
     assert np.isclose(unannualized_c2_weight, weights["c2"])
 
 
-def test_PTE_Rebalance():
+@pytest.mark.parametrize("covar_method", ["standard", "ledoit-wolf"])
+@pytest.mark.parametrize(
+    ("target_volatility", "expected_error"),
+    [
+        (0.1, "zero-volatility"),
+        ({"c1": 0.1}, "zero-volatility"),
+        (0.0, None),
+        ({"c1": 0.0}, None),
+        ({"c2": 0.1}, None),
+    ],
+)
+def test_TargetVol_zero_volatility(
+    covar_method: str,
+    target_volatility: "float | dict[str, float]",
+    expected_error: "str | None",
+):
+    s = bt.Strategy("s")
+    dts = pd.date_range("2010-01-01", periods=5)
+    data = pd.DataFrame(index=dts, columns=["c1"], data=100.0)
+
+    target_vol_algo = algos.TargetVol(
+        target_volatility,
+        lookback=pd.DateOffset(days=4),
+        lag=pd.DateOffset(days=0),
+        covar_method=covar_method,
+        annualization_factor=1,
+    )
+
+    s.setup(data)
+    s.update(dts[-1])
+    initial_weights = {"c1": 1.0}
+    s.temp["weights"] = initial_weights.copy()
+
+    # Preserve satisfied or omitted targets, and reject infeasible targets before mutation.
+    if expected_error is None:
+        assert target_vol_algo(s)
+    else:
+        with pytest.raises(ValueError, match=expected_error):
+            target_vol_algo(s)
+    assert s.temp["weights"] == initial_weights
+
+
+def test_TargetVol_rejects_non_finite_volatility():
+    s = bt.Strategy("s")
+    dts = pd.date_range("2010-01-01", periods=1)
+    data = pd.DataFrame(index=dts, columns=["c1"], data=100.0)
+    target_vol_algo = algos.TargetVol(
+        0.1,
+        lookback=pd.DateOffset(days=1),
+        lag=pd.DateOffset(days=0),
+        annualization_factor=1,
+    )
+
+    s.setup(data)
+    s.update(dts[-1])
+    s.temp["weights"] = {"c1": 1.0}
+
+    with pytest.raises(ValueError, match="non-finite"):
+        target_vol_algo(s)
+
+
+@pytest.mark.parametrize("covar_method", ["standard", "ledoit-wolf"])
+@pytest.mark.parametrize("target_volatility", [np.nan, np.inf, -np.inf])
+@pytest.mark.parametrize("use_mapping", [False, True])
+def test_TargetVol_rejects_non_finite_target(covar_method, target_volatility, use_mapping):
+    dts = pd.date_range("2010-01-01", periods=5)
+    data = pd.DataFrame({"c1": [100.0, 102.0, 99.0, 103.0, 100.0]}, index=dts)
+    data["c2"] = data["c1"]
+    s = bt.Strategy("s")
+    s.setup(data)
+    s.update(dts[-1])
+    initial_weights = {"c1": 0.5, "c2": 0.5}
+    s.temp["weights"] = initial_weights.copy()
+    if use_mapping:
+        target_volatility = {"c1": 0.1, "c2": target_volatility}
+    target_vol_algo = algos.TargetVol(
+        target_volatility,
+        lookback=pd.DateOffset(days=4),
+        lag=pd.DateOffset(days=0),
+        covar_method=covar_method,
+    )
+
+    with pytest.raises(ValueError, match="non-finite target volatility"):
+        target_vol_algo(s)
+    assert s.temp["weights"] == initial_weights
+
+
+@pytest.mark.parametrize("covar_method", ["standard", "ledoit-wolf"])
+@pytest.mark.parametrize("integer_positions", [False, True])
+def test_TargetVol_zero_volatility_backtest(covar_method, integer_positions):
+    dts = pd.date_range("2010-01-01", periods=5)
+    data = pd.DataFrame({"c1": 100.0}, index=dts)
+    s = bt.Strategy(
+        "s",
+        [
+            algos.RunAfterDate(dts[-2]),
+            algos.WeighSpecified(c1=1.0),
+            algos.TargetVol(
+                0.1,
+                lookback=pd.DateOffset(days=4),
+                lag=pd.DateOffset(days=0),
+                covar_method=covar_method,
+            ),
+            algos.Rebalance(),
+        ],
+    )
+    backtest = bt.Backtest(s, data, integer_positions=integer_positions, progress_bar=False)
+
+    with pytest.raises(ValueError, match="zero-volatility"):
+        backtest.run()
+
+
+@pytest.mark.parametrize("covar_method", ["standard", "ledoit-wolf"])
+def test_PTE_Rebalance(covar_method):
 
     s = bt.Strategy("s")
 
@@ -1818,7 +2110,7 @@ def test_PTE_Rebalance():
         wdf,
         lookback=pd.DateOffset(months=3),
         lag=pd.DateOffset(days=1),
-        covar_method="standard",
+        covar_method=covar_method,
         annualization_factor=252,
     )
 
@@ -1828,6 +2120,37 @@ def test_PTE_Rebalance():
     s.rebalance(0.5, "c2")
 
     assert not PTE_rebalance_Algo(s)
+
+
+def test_TargetVol_standard_uses_pairwise_covariance():
+    s = bt.Strategy("s")
+
+    dts = pd.date_range("2010-01-01", periods=8)
+    data = pd.DataFrame(
+        {
+            "c1": [100, 110, 99, 115, 103, 120, 108, 125],
+            "c2": [100, 102, 104, np.nan, 107, 109, 111, 114],
+        },
+        index=dts,
+    )
+
+    targetVolAlgo = algos.TargetVol(
+        0.1,
+        lookback=pd.DateOffset(days=7),
+        covar_method="standard",
+        annualization_factor=1,
+    )
+
+    s.setup(data)
+    s.update(dts[-1])
+    s.temp["weights"] = {"c1": 0.5, "c2": 0.5}
+
+    returns = bt.ffn.to_returns(data)
+    weights = np.array([0.5, 0.5])
+    expected_vol = np.sqrt(weights.T @ returns.cov().values @ weights)
+
+    assert targetVolAlgo(s)
+    assert s.temp["weights"]["c1"] == pytest.approx(0.5 * 0.1 / expected_vol)
 
 
 def test_close_positions_after_date():
@@ -2173,6 +2496,32 @@ def test_hedge_risk():
     assert c1.position == 100
     assert c2.position == -10
     assert c3.position == pytest.approx(-(100 * 2 - 10 * 5) / 10.0, 13)
+
+
+@pytest.mark.parametrize(("hedge_unit_risk", "hedge_multiplier"), [(1, 10), (10, 1)])
+@pytest.mark.parametrize("lazy_add", [False, True])
+def test_hedge_risk_security_multiplier(hedge_unit_risk: int, hedge_multiplier: int, lazy_add: bool):
+    source = bt.Security("source")
+    hedge = bt.HedgeSecurity("hedge", multiplier=hedge_multiplier, lazy_add=lazy_add)
+    strategy = bt.Strategy("strategy", children=[source, hedge])
+    dates = pd.date_range("2010-01-01", periods=1)
+    prices = pd.DataFrame(100, index=dates, columns=["source", "hedge"])
+    unit_risk = pd.DataFrame({"source": [1], "hedge": [hedge_unit_risk]}, index=dates)
+    stack = bt.core.AlgoStack(
+        algos.UpdateRisk("Risk"),
+        algos.SelectThese(["hedge"]),
+        algos.HedgeRisks(["Risk"]),
+        algos.UpdateRisk("Risk"),
+    )
+
+    strategy.setup(prices, unit_risk={"Risk": unit_risk})
+    strategy.update(dates[0])
+    strategy.transact(100, "source")
+    stack(strategy)
+
+    # Equivalent per-contract sensitivities must produce the same hedge and residual.
+    assert strategy["hedge"].position == -10
+    assert vars(strategy)["risk"]["Risk"] == 0
 
 
 def test_hedge_risk_nan():

@@ -20,7 +20,7 @@ def run(*backtests, progress_bar=None):
     object containing the results of the backtests.
 
     Args:
-        * backtest (*list): List of backtests.
+        * backtests (list): Backtests to run.
         * progress_bar (bool): Show progress bar. Defaults to True unless
           all backtests have progress_bar=False.
 
@@ -51,6 +51,9 @@ def benchmark_random(backtest, random_strategy, nsim=100):
     randomly picking weight? Or randomly picking the selected
     securities?
 
+    Random backtests preserve every date from the original supplied
+    market data, including dates with partial missing values.
+
     Args:
         * backtest (Backtest): A backtest you want to benchmark
         * random_strategy (Strategy): A strategy you want to benchmark
@@ -72,7 +75,8 @@ def benchmark_random(backtest, random_strategy, nsim=100):
 
     bts = []
     bts.append(backtest)
-    data = backtest.data.dropna()
+    # Remove only Backtest's synthetic first row without dropping real partial rows.
+    data = backtest.data.iloc[1:]
 
     # create and run random backtests
     for i in tqdm(range(nsim)):
@@ -102,8 +106,9 @@ class Backtest:
 
     Args:
         * strategy (Strategy, Node, StrategyBase): The Strategy to be tested.
-        * data (DataFrame): DataFrame containing data used in backtest. This
-          will be the Strategy's "universe".
+        * data (DataFrame): DataFrame containing data used in backtest. The
+          index must be monotonic increasing. This will be the Strategy's
+          "universe".
         * name (str): Backtest name - defaults to strategy name
         * initial_capital (float): Initial amount of capital passed to
           Strategy.
@@ -126,6 +131,7 @@ class Backtest:
         * additional_data (dict): Additional kwargs passed to StrategyBase.setup, after preprocessing
           This data can be retrieved by Algos using StrategyBase.get_data.
           The data may also be used by the Strategy itself, i.e.
+
             - ``bidoffer``: A DataFrame with the same format as 'data', will be used
               by the strategy for transaction cost modeling
             - ``coupons``: A DataFrame with the same format as 'data', will by used
@@ -176,6 +182,10 @@ class Backtest:
             cols = data.columns[data.columns.duplicated().tolist()].tolist()
             raise ValueError(f"data provided has some duplicate column names: \n{cols} \nPlease remove duplicates!")
 
+        # Label-based universe slicing can otherwise expose future rows.
+        if not data.index.is_monotonic_increasing:
+            raise ValueError("data index must be monotonic increasing")
+
         # we want to reuse strategy logic - copy it!
         # basically strategy is a template
         self.strategy = deepcopy(strategy)
@@ -202,6 +212,7 @@ class Backtest:
 
         self.stats = {}
         self._original_prices = None
+        self._stat_prices = None
         self._weights = None
         self._sweights = None
         self.has_run = False
@@ -218,40 +229,85 @@ class Backtest:
         if not volatility.columns.equals(data.columns):
             raise ValueError("`volatility` columns must match `data` columns.")
 
+    @staticmethod
+    def _prepend_missing_row(data):
+        """Prepend an all-missing row, promoting non-nullable column dtypes."""
+        # Expand positionally so duplicate date labels retain their existing behavior.
+        positional = data.set_axis(pd.RangeIndex(len(data)))
+        positional = positional.reindex(pd.RangeIndex(-1, len(data)))
+        index = data.index.insert(0, data.index[0] - pd.DateOffset(days=1))
+        return positional.set_axis(index)
+
     def _align_impact_frame(self, df):
         """Prepend the t0-1 NaN row that ``_process_data`` adds to ``data``,
         so per-bar lookups by ``security.now`` always resolve.
         """
-        empty_row = pd.DataFrame(
-            np.nan,
-            columns=df.columns,
-            index=[df.index[0] - pd.DateOffset(days=1)],
-        ).astype(df.dtypes)
-        return pd.concat([empty_row, df])
+        return self._prepend_missing_row(df)
 
     def _install_cost_model_hook(self):
-        """Wire per-security ``commission`` after strategy setup. Also covers
-        lazily-created child securities by hooking ``_create_child_if_needed``.
-        """
+        """Wire commissions throughout real and paper trees after setup."""
         original_setup = self.strategy.setup
-        original_create = self.strategy._create_child_if_needed
 
         def hooked_setup(*args, **kwargs):
             result = original_setup(*args, **kwargs)
-            for member in self.strategy.members:
-                if isinstance(member, bt.core.SecurityBase):
-                    self._wire_security(member)
-            return result
-
-        def hooked_create(child):
-            result = original_create(child)
-            sec = self.strategy.children.get(child)
-            if isinstance(sec, bt.core.SecurityBase):
-                self._wire_security(sec)
+            strategy = self.strategy
+            assert isinstance(strategy, bt.core.StrategyBase)
+            self._wire_strategy_tree(strategy)
             return result
 
         self.strategy.setup = hooked_setup
-        self.strategy._create_child_if_needed = hooked_create
+
+    def _wire_strategy_tree(self, strategy: bt.core.StrategyBase):
+        """Wire direct securities and lazy creation in a strategy tree."""
+        if getattr(strategy, "_cost_model_tree_wired", False):
+            return
+
+        original_create = strategy._create_child_if_needed
+        original_add = strategy._add_children
+
+        def hooked_add(children, dc):
+            first_new_child = len(strategy._childrenv)
+            result = original_add(children, dc)
+            for child in strategy._childrenv[first_new_child:]:
+                if isinstance(child, bt.core.SecurityBase):
+                    self._wire_security(child)
+                elif isinstance(child, bt.core.StrategyBase):
+                    self._install_dynamic_strategy_hook(child)
+            return result
+
+        def hooked_create(child: str):
+            result = original_create(child)
+            node = strategy.children.get(child)
+            if isinstance(node, bt.core.SecurityBase):
+                self._wire_security(node)
+            elif isinstance(node, bt.core.StrategyBase):
+                self._wire_nested_strategy(node)
+            return result
+
+        strategy._add_children = hooked_add
+        strategy._create_child_if_needed = hooked_create
+        strategy._cost_model_tree_wired = True
+        for child in strategy._childrenv:
+            if isinstance(child, bt.core.SecurityBase):
+                self._wire_security(child)
+            elif isinstance(child, bt.core.StrategyBase):
+                self._wire_nested_strategy(child)
+
+    def _wire_nested_strategy(self, strategy: bt.core.StrategyBase):
+        self._wire_strategy_tree(strategy)
+        # Nested strategies price themselves through a separate paper tree.
+        if strategy._paper_trade:
+            self._wire_strategy_tree(strategy._paper)
+
+    def _install_dynamic_strategy_hook(self, strategy: bt.core.StrategyBase):
+        original_setup_from_parent = strategy.setup_from_parent
+
+        def hooked_setup_from_parent(*args, **kwargs):
+            result = original_setup_from_parent(*args, **kwargs)
+            self._wire_nested_strategy(strategy)
+            return result
+
+        strategy.setup_from_parent = hooked_setup_from_parent
 
     def _wire_security(self, security):
         if getattr(security, "_cost_model_wired", False):
@@ -296,20 +352,8 @@ class Backtest:
         # and add in the first row as well (i.e. "bidoffer")
         for k in self.additional_data:
             old = self.additional_data[k]
-            if isinstance(old, pd.DataFrame) and old.index.equals(data.index):
-                empty_row = pd.DataFrame(
-                    np.nan,
-                    columns=old.columns,
-                    index=[old.index[0] - pd.DateOffset(days=1)],
-                )
-                # Ensure dtypes match to avoid FutureWarning
-                empty_row = empty_row.astype(old.dtypes)
-                new = pd.concat([empty_row, old])
-                self.additional_data[k] = new
-            elif isinstance(old, pd.Series) and old.index.equals(data.index):
-                empty_row = pd.Series(np.nan, index=[old.index[0] - pd.DateOffset(days=1)], dtype=old.dtype)
-                new = pd.concat([empty_row, old])
-                self.additional_data[k] = new
+            if isinstance(old, (pd.DataFrame, pd.Series)) and old.index.equals(data.index):
+                self.additional_data[k] = self._prepend_missing_row(old)
 
     def run(self):
         """
@@ -353,8 +397,26 @@ class Backtest:
                 if self.progress_bar:
                     bar.stop()
 
-        self.stats = self.strategy.prices.calc_perf_stats()
         self._original_prices = self.strategy.prices
+        self._stat_prices = self._compute_stat_prices()
+        self.stats = self._stat_prices.calc_perf_stats()
+
+    def _compute_stat_prices(self):
+        prices = self.strategy.prices
+        first_transaction_date = None
+        for security in self.strategy.securities:
+            positions = security.positions
+            position_changed = positions.ne(positions.shift(fill_value=0))
+            if position_changed.any():
+                transaction_date = positions.index[position_changed][0]
+                if first_transaction_date is None or transaction_date < first_transaction_date:
+                    first_transaction_date = transaction_date
+
+        if first_transaction_date is not None:
+            first_transaction_position = prices.index.get_indexer_for([first_transaction_date])[0]
+            return prices.iloc[max(first_transaction_position - 1, 0) :]
+
+        return prices
 
     @property
     def weights(self):
@@ -469,7 +531,7 @@ class Result(ffn.GroupStats):
     """
 
     def __init__(self, *backtests):
-        tmp = [pd.DataFrame({x.name: x.strategy.prices}) for x in backtests]
+        tmp = [pd.DataFrame({x.name: x._stat_prices if x._stat_prices is not None else x.strategy.prices}) for x in backtests]
         super().__init__(*tmp)
         self.backtest_list = backtests
         self.backtests = {x.name: x for x in backtests}
@@ -485,6 +547,16 @@ class Result(ffn.GroupStats):
         """
         key = self._get_backtest(backtest)
         self[key].display_monthly_returns()
+
+    def get_monthly_max_drawdown(self):
+        """Return maximum drawdown from monthly-resampled prices.
+
+        The final, potentially incomplete month is included.
+        """
+        return pd.Series(
+            {key: self[key].monthly_prices.calc_max_drawdown() for key in self._names},
+            name="monthly_max_drawdown",
+        )
 
     def get_weights(self, backtest=0, filter=None):
         """
@@ -687,7 +759,12 @@ class RenormalizedFixedIncomeResult(Result):
                 raise ValueError(f"Cannot apply RenormalizedFixedIncomeResult because backtest {backtest.name} is not on a fixed income strategy")
         if not isinstance(normalizing_value, dict):
             normalizing_value = {x.name: normalizing_value for x in backtests}
-        tmp = [pd.DataFrame({x.name: self._price(x.strategy, normalizing_value[x.name])}) for x in backtests]
+        tmp = []
+        for backtest in backtests:
+            prices = self._price(backtest.strategy, normalizing_value[backtest.name])
+            if backtest._stat_prices is not None:
+                prices = prices.reindex(backtest._stat_prices.index)
+            tmp.append(pd.DataFrame({backtest.name: prices}))
         super(Result, self).__init__(*tmp)
         self.backtest_list = backtests
         self.backtests = {x.name: x for x in backtests}

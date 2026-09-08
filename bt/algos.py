@@ -226,7 +226,7 @@ class RunWeekly(RunPeriod):
     """
 
     def compare_dates(self, now, date_to_compare):
-        return bool(now.year != date_to_compare.year or now.week != date_to_compare.week)
+        return now.isocalendar()[:2] != date_to_compare.isocalendar()[:2]
 
 
 class RunMonthly(RunPeriod):
@@ -372,6 +372,7 @@ class RunIfOutOfBounds(Algo):
     This algo returns true if any of the target weights deviate by an amount greater
     than tolerance. For example, it will be run if the tolerance is set to 0.5 and
     a security grows from a target weight of 0.2 to greater than 0.3.
+    A zero target weight is out of bounds whenever the current weight is nonzero.
 
     A strategy where rebalancing is performed quarterly or whenever any
     security's weight deviates by more than 20% could be implemented by:
@@ -399,6 +400,10 @@ class RunIfOutOfBounds(Algo):
         for cname in target.children:
             if cname in targets:
                 c = target.children[cname]
+                if targets[cname] == 0:
+                    if c.weight != 0:
+                        return True
+                    continue
                 deviation = abs((c.weight - targets[cname]) / targets[cname])
                 if deviation > self.tolerance:
                     return True
@@ -654,12 +659,14 @@ class SelectMomentum(AlgoStack):
 
     Args:
         * n (int): select first N elements
-        * lookback (DateOffset): lookback period for total return
-          calculation
+        * lookback (DateOffset|sequence): lookback period for total return
+          calculation, or a sequence of periods whose returns are averaged
         * lag (DateOffset): Lag interval for total return calculation
         * sort_descending (bool): Sort descending (highest return is best)
         * all_or_none (bool): If true, only populates temp['selected'] if we
           have n items. If we have less than n, then temp['selected'] = [].
+        * weights (sequence): Optional non-negative weights for multiple
+          lookback periods.
 
     Sets:
         * selected
@@ -676,9 +683,17 @@ class SelectMomentum(AlgoStack):
         lag=_DEFAULT_LAG,
         sort_descending=True,
         all_or_none=False,
+        weights=None,
     ):
+        if isinstance(lookback, (list, tuple, np.ndarray, pd.Index)):
+            stat = StatMultiPeriodReturn(lookbacks=lookback, weights=weights, lag=lag)
+        else:
+            if weights is not None:
+                raise ValueError("weights require multiple lookback periods")
+            stat = StatTotalReturn(lookback=lookback, lag=lag)
+
         super().__init__(
-            StatTotalReturn(lookback=lookback, lag=lag),
+            stat,
             SelectN(n=n, sort_descending=sort_descending, all_or_none=all_or_none),
         )
 
@@ -688,10 +703,18 @@ class SelectWhere(Algo):
     Selects securities based on an indicator DataFrame.
 
     Selects securities where the value is True on the current date
-    (target.now) only if current date is present in signal DataFrame.
+    (target.now). If the date is absent from the signal DataFrame, returns
+    False to stop the AlgoStack. A present all-False row remains a valid empty
+    selection and returns True.
 
     For example, this could be the result of a pandas boolean comparison such
     as data > 100.
+
+    Warning:
+        Signals derived from fundamental data are only point-in-time safe when
+        the data contains values known on each historical date. Data containing
+        later restatements introduces look-ahead bias. SelectWhere evaluates the
+        supplied signal as-is and cannot detect or correct restated values.
 
     Args:
         * signal (str|DataFrame): Boolean DataFrame containing selection logic.
@@ -738,8 +761,10 @@ class SelectWhere(Algo):
                 else:
                     selected = list(universe[universe > 0].index)
             target.temp["selected"] = list(selected)
+            return True
 
-        return True
+        # Stop downstream Algos when no signal row exists for the current date.
+        return False
 
 
 class SelectRandomly(AlgoStack):
@@ -943,6 +968,54 @@ class StatTotalReturn(Algo):
             return False
         prc = target.universe.loc[t0 - self.lookback : t0, selected]
         target.temp["stat"] = prc.calc_total_return()
+        return True
+
+
+class StatMultiPeriodReturn(Algo):
+    """
+    Sets temp['stat'] to the weighted average of multiple total returns.
+
+    Args:
+        * lookbacks (sequence): DateOffset lookback periods.
+        * weights (sequence): Optional non-negative weight for each lookback.
+          Equal weights are used by default. Weights are normalized to sum to
+          one.
+        * lag (DateOffset): Lag interval. Each total return ends at now - lag.
+
+    Sets:
+        * stat
+
+    Requires:
+        * selected
+    """
+
+    def __init__(self, lookbacks, weights=None, lag=_DEFAULT_LAG):
+        super().__init__()
+        self.lookbacks = list(lookbacks)
+        if not self.lookbacks:
+            raise ValueError("lookbacks cannot be empty")
+
+        if weights is None:
+            weights = np.ones(len(self.lookbacks))
+        elif len(weights) != len(self.lookbacks):
+            raise ValueError("weights and lookbacks must have the same length")
+
+        weights = np.asarray(weights, dtype=float)
+        if np.any(weights < 0):
+            raise ValueError("weights must be non-negative")
+        if weights.sum() == 0:
+            raise ValueError("weights must not sum to zero")
+        self.weights = weights / weights.sum()
+        self.lag = lag
+
+    def __call__(self, target):
+        selected = target.temp["selected"]
+        t0 = target.now - self.lag
+        if target.universe[selected].index[0] > t0:
+            return False
+
+        returns = [target.universe.loc[t0 - lookback : t0, selected].calc_total_return() for lookback in self.lookbacks]
+        target.temp["stat"] = pd.concat(returns, axis=1).dot(self.weights)
         return True
 
 
@@ -1449,6 +1522,10 @@ class TargetVol(Algo):
     Requires:
         * temp['weights']
 
+    Raises:
+        * ValueError: if an applicable target or the estimated portfolio
+          volatility is non-finite, or if the estimated volatility is zero
+          when an applicable non-zero target is requested.
 
     """
 
@@ -1481,7 +1558,11 @@ class TargetVol(Algo):
 
         # calc covariance matrix
         if self.covar_method == "ledoit-wolf":
-            covar = sklearn.covariance.ledoit_wolf(returns)
+            covar = pd.DataFrame(
+                sklearn.covariance.ledoit_wolf(returns.dropna())[0],
+                index=returns.columns,
+                columns=returns.columns,
+            )
         elif self.covar_method == "standard":
             covar = returns.cov()
         else:
@@ -1492,11 +1573,30 @@ class TargetVol(Algo):
         vol = np.sqrt(np.matmul(weights.values.T, np.matmul(covar.values, weights.values)) * self.annualization_factor)
 
         if isinstance(self.target_volatility, (float, int)):
-            self.target_volatility = {k: self.target_volatility for k in target.temp["weights"]}
+            target_volatility = {k: self.target_volatility for k in target.temp["weights"]}
+        else:
+            target_volatility = self.target_volatility
+
+        # A target mapping may intentionally omit some or all current weights.
+        applicable_target_volatilities: list[float] = [target_volatility[k] for k in target.temp["weights"] if k in target_volatility]
+        if not applicable_target_volatilities:
+            return True
+
+        if not np.isfinite(applicable_target_volatilities).all():
+            raise ValueError("Cannot target a non-finite target volatility")
+
+        if not np.isfinite(vol):
+            raise ValueError("Cannot target volatility from a non-finite portfolio volatility")
+
+        if vol == 0:
+            # Scaling cannot create volatility from zero; zero is already a valid target.
+            if any(value != 0 for value in applicable_target_volatilities):
+                raise ValueError("Cannot target a non-zero volatility from a zero-volatility portfolio")
+            return True
 
         for k in target.temp["weights"]:
-            if k in self.target_volatility:
-                target.temp["weights"][k] = target.temp["weights"][k] * self.target_volatility[k] / vol
+            if k in target_volatility:
+                target.temp["weights"][k] = target.temp["weights"][k] * target_volatility[k] / vol
 
         return True
 
@@ -1569,7 +1669,11 @@ class PTE_Rebalance(Algo):
 
         # calc covariance matrix
         if self.covar_method == "ledoit-wolf":
-            covar = sklearn.covariance.ledoit_wolf(returns)
+            covar = pd.DataFrame(
+                sklearn.covariance.ledoit_wolf(returns.dropna())[0],
+                index=returns.columns,
+                columns=returns.columns,
+            )
         elif self.covar_method == "standard":
             covar = returns.cov()
         else:
@@ -2067,6 +2171,7 @@ class RollPositionsAfterDates(Algo):
 
     Args:
         * roll_data (str): the name of a dataframe indexed by security name, with columns
+
             - "date": the first date at which the roll can occur
             - "target": the security name we are rolling into
             - "factor": the conversion factor. One unit of the original security
@@ -2193,7 +2298,7 @@ class SimulateRFQTransactions(Algo):
 
     Args:
         * rfqs (str): name of a dataframe with columns
-          Date, Security | quantity, *additional columns as required by model
+          Date, Security | quantity, and additional columns as required by model
         * model (object): a function/callable object with arguments
                 - rfqs : data frame of rfqs to respond to
                 - target : the strategy object, for access to position and value data
@@ -2340,6 +2445,9 @@ class HedgeRisks(Algo):
     """
     Hedges risk measures with selected instruments.
 
+    Unit risk is scaled by each selected security's multiplier to obtain its
+    per-contract sensitivity.
+
     Make sure that the UpdateRisk algo has been called beforehand.
 
     Args:
@@ -2400,6 +2508,16 @@ class HedgeRisks(Algo):
             data.append((i, d))
 
         hedge_risk = np.array([[_get_unit_risk(s, d, i) for (i, d) in data] for s in securities])
+        hedge_risk = hedge_risk.astype(float, copy=False)
+        for row in range(hedge_risk.shape[0]):
+            security = securities[row]
+            child = target.children.get(security)
+            if child is None:
+                child = target._lazy_children.get(security)
+
+            # Undeclared names become multiplier-one Securities when transacted.
+            if isinstance(child, bt.core.SecurityBase):
+                hedge_risk[row] *= child.multiplier
 
         # Get hedge ratios
         if self.pseudo:
