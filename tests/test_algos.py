@@ -148,15 +148,21 @@ def test_run_daily():
 
 
 @pytest.mark.parametrize(
-    "start,expected_start,expected_end",
+    "dates,expected_start,expected_end",
     [
-        ("2015-12-28", "2016-01-04", "2016-01-03"),
-        ("2018-12-28", "2018-12-31", "2018-12-30"),
+        (pd.date_range("2015-12-28", periods=9), "2016-01-04", "2016-01-03"),
+        (pd.date_range("2018-12-28", periods=9), "2018-12-31", "2018-12-30"),
+        (
+            pd.to_datetime(["2018-12-27", "2018-12-28", "2018-12-31", "2019-01-02", "2019-01-03"]),
+            "2018-12-31",
+            "2018-12-28",
+        ),
     ],
 )
 @pytest.mark.parametrize("run_on_end_of_period", [False, True])
+@pytest.mark.parametrize("timezone", [None, "America/New_York"])
 def test_run_weekly_does_not_split_an_iso_week_at_new_year(
-    start, expected_start, expected_end, run_on_end_of_period
+    dates, expected_start, expected_end, run_on_end_of_period, timezone
 ):
     class RecordDates(bt.Algo):
         def __init__(self):
@@ -166,7 +172,7 @@ def test_run_weekly_does_not_split_an_iso_week_at_new_year(
             self.dates.append(target.now)
             return True
 
-    data = pd.DataFrame({"asset": 100.0}, index=pd.date_range(start, periods=9))
+    data = pd.DataFrame({"asset": 100.0}, index=dates.tz_localize(timezone))
     strategy = bt.Strategy(
         "weekly",
         [
@@ -181,7 +187,7 @@ def test_run_weekly_does_not_split_an_iso_week_at_new_year(
     backtest.run()
 
     expected = expected_end if run_on_end_of_period else expected_start
-    assert backtest.strategy.stack.algos[1].dates == [pd.Timestamp(expected)]
+    assert backtest.strategy.stack.algos[1].dates == [pd.Timestamp(expected, tz=timezone)]
 
 
 def test_run_weekly():
