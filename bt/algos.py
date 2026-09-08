@@ -226,7 +226,7 @@ class RunWeekly(RunPeriod):
     """
 
     def compare_dates(self, now, date_to_compare):
-        return bool(now.year != date_to_compare.year or now.week != date_to_compare.week)
+        return now.isocalendar()[:2] != date_to_compare.isocalendar()[:2]
 
 
 class RunMonthly(RunPeriod):
